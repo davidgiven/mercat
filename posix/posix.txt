@@ -1,14 +1,14 @@
-                         MERCAT POSIX RUN-TIME V0.2.1
-                         ============================
+                          MERCAT POSIX RUN-TIME V0.3
+                          ==========================
 				  
-				 Alpha release
+				 Beta release
                             (C) 1997-8 David Given
-			           9/9/1998
+			           18/11/1998
 
 INTRODUCTION
 ============
 
-This is an alpha release of my Mercat virtual machine.
+This is a beta release of my Mercat virtual machine.
 
 The Mercat system comprises a compiler, assembler and a run-time system. The
 run-time system is written in C; the rest of it is, of course, written in
@@ -24,9 +24,10 @@ versions of the run-time, then see the web page at:
 QUICK START GUIDE
 =================
 
-1. Edit config.h. It is self-documenting.
+1. Edit config.h. It is self-documenting. You probably won't need to change
+anything.
 2. Edit Makefile. You probably won't need to change anything if you use
-gcc.
+gcc, except the libraries.
 3. make
 
 This will build an executable called `mi' (or `mi.exe' under DOS). See the
@@ -35,9 +36,10 @@ core readme file for information on how to use it.
 DOS SPECIFICS
 =============
 
-DOS, being DOS, is awkward. If you're using DJGPP then things should be
-pretty straightforward. If you're using Borland for a 16-bit build...
-well, I haven't tried that yet.
+DOS, being DOS, is awkward. If you're using DJGPP of Borland for a 16-bit
+build then globals.h should autodetect everything pretty well. For best
+results use a Unix-lookalike editor; I use vi (GCC occasionally has trouble
+with CRLF text files).
 
 FEEDBACK
 ========
@@ -50,10 +52,7 @@ LICENSE
 =======
 
 The little grey men with briefcases made me put this bit in. Anyway. It's mine,
-all mine[*], you can use it for non-commercial purposes but can't
+all mine, you can use it for non-commercial purposes but can't
 redistribute it without my permission. If you wish to make changes send them
 back to me and I'll integrate them into the rest of the system.
 
-[*] Except for the Paranoia game. This is my port of Tim Lister's
-implementation. He, in turn, took the text from an article by Sam Shirley. See
-the top of paranoia.mi for more information.

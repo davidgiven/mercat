@@ -15,59 +15,6 @@
 
 library standard;
 
-// --- Prototypes (to be removed later) -------------------------------------
-
-inline void AppExit
-	int exitcode;
-{"sys AppExit"}
-
-inline void PrintString
-	int stream;
-	string message;
-{"sys PrintString"}
-
-inline void PrintShort
-	int stream;
-	int value;
-{"sys PrintShort"}
-
-inline void PrintLong
-	int stream;
-	int value;
-{"sys PrintLong"}
-
-inline void PrintNL
-	int stream;
-{"sys PrintNL"}
-
-inline int StreamOpenFile
-	string filename;
-	string flags;
-{"sys StreamOpenFile"}
-
-inline void StreamClose
-	int stream;
-{"sys StreamClose"}
-
-inline void StreamFlush
-	int stream;
-{"sys StreamFlush"}
-
-inline string StreamReadChar
-	int stream;
-{"sys StreamReadChar"}
-
-inline int RandomNumber
-	int range;
-{"sys RandomNumber"}
-
-inline void RandomSeedRandom
-{"sys RandomSeedRandom"}
-
-global int stdin := 0;
-global int stdout := 1;
-global int stderr := 2;
-
 // --- Globals --------------------------------------------------------------
 
 global int MOXIE := 13;
@@ -96,7 +43,7 @@ function void print
 function void prints
 	int i;
 {
-	PrintLong(stdout, i);
+	PrintInt(stdout, i);
 }
 
 function string get_char
@@ -1203,7 +1150,6 @@ function int next_page
 
 function void main
 {
-	RandomSeedRandom();
 	instructions();	more();
 	character();	more();
 	do {
@@ -1214,4 +1160,4 @@ function void main
 }
 
 end;
-end;
+

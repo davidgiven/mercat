@@ -1,0 +1,26 @@
+THINGS TO DO
+============
+
+Yes, well, where do I start...
+
+Lots of compatibility stuff. Lots of feature enhancements. The SCR module
+needs to have proper ISO Latin 1 support. The assembler needs rewriting
+completely. The compiler needs the missing features implemented (delete()
+on dictionaries, function pointers, proper precedence on operators, better
+syntax for defining arrays...) and needs a better interface (like,
+sometimes it's nice not to emit debugging information).
+
+Oh, yes, and there's the D word. Documentation. I need some. Anything. And
+if there's one thing I hate it's writing documentation.
+
+If it helps, I have an incredibly bad memory when it comes to remembering
+how programs work. Coming back to the compiler after spending some time on
+the VM was quite an experience. It took me about a week to work out what I
+did in the routines that analyse types, and then I wrote huge comments
+describing how they did it. But on the whole I could understand it all
+reasonably easily. What? I'm actually pointing out how clear my code is by
+saying how easily *I* could understand this? I need to go to bed! It's
+past midnight!
+
+
+

@@ -3,9 +3,9 @@
  */
 
 extern void sys_RandomNumber(void);
-extern void sys_RandomSeedRandom(void);
+extern void sys_RandomSetSeed(void);
 
 #define NUMBER \
 	{"RandomNumber",	sys_RandomNumber},	\
-	{"RandomSeedRandom",	sys_RandomSeedRandom},
+	{"RandomSetSeed",	sys_RandomSetSeed},
 

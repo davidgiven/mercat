@@ -1,1 +1,1 @@
-@mi -Md mic.mo %1 > %2
+@mi -Md mic.mo %1 %2

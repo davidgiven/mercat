@@ -138,6 +138,7 @@ void execute(void)
 
 			case OP_GETA:
 				o = popo();
+				checkNull(o);
 				switch(o->type)
 				{
 					case OBJ_BYTEARRAY:
@@ -156,6 +157,7 @@ void execute(void)
 
 			case OP_SETA:
 				o = popo();
+				checkNull(o);
 				switch(o->type)
 				{
 					case OBJ_BYTEARRAY:
@@ -394,6 +396,47 @@ void execute(void)
 				o2 = popo();
 				o1 = popo();
 				pushi(DictStat(o1, o2));
+				break;
+
+			case OP_ISNIL:
+				o1 = popo();
+				pushi(o1 == NULL);
+				break;
+			
+			case OP_DUPI:
+				l = popi();
+				pushi(l);
+				pushi(l);
+				break;
+			
+			case OP_DUPO:
+				o1 = popo();
+				pusho(o1);
+				pusho(o1);
+				break;
+
+			case OP_I2O:
+				pusho(CreateOInt(popi()));
+				break;
+
+			case OP_O2I:
+				pushi(ExtractOInt(popo()));
+				break;
+				
+			case OP_INSERTARRAY:
+				{
+					int size = popi();
+					int index = popi();
+					ArrayInsert(popo(), index, size);
+				}
+				break;
+
+			case OP_DELETEARRAY:
+				{
+					int size = popi();
+					int index = popi();
+					ArrayDelete(popo(), index, size);
+				}
 				break;
 
 			default:

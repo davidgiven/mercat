@@ -1,0 +1,391 @@
+// snake.mi
+// A simple game demonstrating the SCR module
+
+library standard;
+library scr;
+
+global int gridwidth;
+global int gridheight;
+global int score;
+global array int grid;
+global int growth;
+global int head;
+global int tail;
+global int vector;
+global int delay;
+global int goal;
+global int goaltime;
+
+// --- Draws the title `picture' ----------------------------------------------
+
+global array byte title_sea_bitmap := StringToByteArray(
+	"02220033333000200" +
+	"20002030000002020" +
+	"20000030000020002" +
+	"02220033330020002" +
+	"00002030000022222" +
+	"20002030000020002" +
+	"02220033333020002");
+
+global array byte title_snake_bitmap := StringToByteArray(
+	"06660040004000600040004066666" +
+	"60006044004006060040040060000" +
+	"60000040404060006040400060000" +
+	"06660040404060006044000066660" +
+	"00006040044066666040400060000" +
+	"60006040004060006040040060000" +
+	"06660040004060006040004066666");
+
+function void draw_bitmap
+	int x;
+	int y;
+	array byte bitmap;
+{
+	int i;
+	int width := sizeof(bitmap) / 7;
+
+	ScrGotoXY(x, y);
+	for(i:=0; i<sizeof(bitmap); i:=i+1)
+	{
+		ScrSetBG(bitmap[i]-48);
+		ScrPutStr(" ");
+		if ((i rem width) == (width - 1))
+		{
+			y := y + 1;
+			ScrGotoXY(x, y);
+		}
+	}
+}
+
+function void draw_box
+	int x1;
+	int y1;
+	int x2;
+	int y2;
+{
+	int i;
+
+	ScrGotoXY(x1+1, y1);
+	ScrPutStr(StringDup((x2-x1)-1, "-"));
+	ScrGotoXY(x1+1, y2);
+	ScrPutStr(StringDup((x2-x1)-1, "-"));
+
+	for(i:=(y1+1); i<y2; i:=i+1)
+	{
+		ScrGotoXY(x1, i);
+		ScrPutStr("|");
+		ScrGotoXY(x2, i);
+		ScrPutStr("|");
+	}
+}
+
+function void draw_title
+{
+	int i;
+
+	ScrSetFGBG(7, 0);
+	ScrClear();
+	for(i:=0; i<10; i:=i+1)
+	{
+		ScrGotoXY(RandomNumber(ScrWidth()-1), RandomNumber(ScrHeight()-1));
+		ScrSetFGBG(4, 0);
+		ScrPutStr("*");
+		ScrGotoXY(RandomNumber(ScrWidth()-1), RandomNumber(ScrHeight()-1));
+		ScrSetFGBG(6, 0);
+		ScrPutStr("*");
+	}
+		
+	draw_bitmap((ScrWidth()/2)-8, 4, title_sea_bitmap);
+	draw_bitmap((ScrWidth()/2)-14, 12, title_snake_bitmap);
+	ScrSetFGBG(2, 0);
+	draw_box(10, 2, 70, 20);
+
+	ScrSetFG(5);
+	ScrGotoXY((ScrWidth()/2)-16, ScrHeight()-3);
+	ScrPutStr("An interactive game by David Given");
+	ScrSetFG(1);
+	ScrGotoXY((ScrWidth()/2)-12, ScrHeight()-2);
+	ScrPutStr("Press the space bar to play");
+
+	// This is a neat trick to initialise the random number generator
+
+	i := TimeNow();
+	while (ScrGetCh() != 32)
+	{}
+	RandomSetSeed(TimeNow());
+}
+
+// --- Draw game over message -------------------------------------------------
+
+function void draw_gameover
+{
+	int x1 := (ScrWidth()/2) - 20;
+	int y1 := (ScrHeight()/4);
+	int x2 := (ScrWidth()/2) + 20;
+	int y2 := (3*ScrHeight()/4) - 2;
+	string rank;
+
+	ScrSetFGBG(7, 4);
+	ScrClearArea(x1, y1, x2, y2);
+	ScrGotoXY((ScrWidth()/2) - 5, y1+1);
+	ScrPutStr("GAME OVER");
+
+	ScrSetFG(2);
+	ScrGotoXY((ScrWidth()/2) - 11, y1+4);
+	ScrPutStr("You reached a score of:");
+	
+	ScrSetFG(3);
+	ScrGotoXY((ScrWidth()/2) - 1, y1+6);
+	ScrPutStr(IntToString(score));
+
+	if (score == 5)
+		rank := "someone who doesn't know the keys";
+	else if (score < 10)
+		rank := "an animate left thumb";
+	else if (score < 20)
+		rank := "someone who can't be bothered playing";
+	else if (score < 40)
+		rank := "someone who is beginning to perserve";
+	else if (score < 60)
+		rank := "someone needing to practice";
+	else if (score < 100)
+		rank := "someone with potential";
+	else if (score < 150)
+		rank := "quite good";
+	else if (score < 200)
+		rank := "better than I am";
+	else if (score < 250)
+		rank := "wasting your life on this game";
+	else if (score < 300)
+		rank := "a cheater";
+
+	ScrGotoXY((ScrWidth()/2) - (sizeof(rank)/2), y2-1);
+	ScrPutStr(rank);
+
+	ScrSetFG(2);
+	ScrGotoXY((ScrWidth()/2) - 8, y2-2);
+	ScrPutStr("which makes you");
+
+	ScrSetFGBG(3, 2);
+	ScrClearArea(x1, y2+2, x2, y2+2);
+	ScrGotoXY((ScrWidth()/2) - 11, y2+2);
+	ScrPutStr("Press space to continue");
+
+	while (ScrGetCh() != 32)
+	{}
+}
+
+// --- Clears the grid --------------------------------------------------------
+
+function void clear_grid
+{
+	int i := 0;
+	while (i < sizeof(grid))
+	{
+		grid[i] := (i rem gridwidth) == 0;
+		i := i + 1;
+	}
+}
+
+// --- Draw the box -----------------------------------------------------------
+
+function void draw_game_area
+{
+	ScrSetFGBG(7, 1);
+	ScrClearArea(0, 1, ScrWidth()-1, ScrHeight()-1);
+	ScrSetFGBG(7, 0);
+	ScrClearArea(2, 2, ScrWidth()-3, ScrHeight()-2);
+}
+
+// --- Draw a `pixel' ---------------------------------------------------------
+
+function void draw_pixel
+	int pos;
+	int value;
+{
+	int x := pos rem gridwidth;
+	int y := pos / gridwidth;
+	
+	ScrGotoXY(x*2, 2+y);
+	if (value > 0)
+	{
+		if (value < 10)
+			ScrPutStr(" ");
+		ScrPutStr(IntToString(value));
+	}
+	else
+		ScrPutStr("  ");
+}
+
+// --- Creates a goal ---------------------------------------------------------
+
+function void new_goal
+{
+	do {
+		goal := RandomNumber(sizeof(grid));
+	} while (grid[goal] != 0);
+	goaltime := TimeNow() + 10000;
+	grid[goal] := 2;
+}
+
+// --- Processes the goal -----------------------------------------------------
+
+function void process_goal
+{
+	int t := (goaltime - TimeNow()) / 1000;
+
+	if (t <= 0)
+	{
+		ScrSetFGBG(0, 0);
+		draw_pixel(goal, 0);
+		grid[goal] := 0;
+		new_goal();
+		t := 9;
+	}
+	
+	ScrSetFGBG(6, 4);
+	draw_pixel(goal, t);
+}
+
+// --- Update status bar ------------------------------------------------------
+
+function void update_status_bar
+{
+	string s := IntToString(score);
+	
+	ScrGotoXY((ScrWidth()-2)-sizeof(s), 0);
+	ScrSetFGBG(3, 0);
+	ScrPutStr(s);
+}
+	
+// --- Update static part of bar ----------------------------------------------
+
+function void draw_static_bar
+{
+	string s := "S*E*A   S*N*A*K*E";
+	int x := (ScrWidth()/2) - sizeof(s);
+	int c := 0;
+	int i := 0;
+
+	while (i<sizeof(s))
+	{
+		ScrGotoXY(x + (i*2), 0);
+		ScrSetFGBG(3 + (c*2), 0);
+		ScrPutStr(s[i]);
+		i := i + 1;
+		c := 1 - c;
+	}
+}
+	
+// --- Main game loop ---------------------------------------------------------
+
+function void main_loop
+{
+	int c;
+	int time := TimeNow();
+
+	while (1)
+	{
+		update_status_bar();
+		process_goal();
+
+		// Wait
+		
+		ScrGotoXY(0, 0);
+		TimeSleepUntil(time+delay);
+		time := TimeNow();
+		
+		// Flush buffer and get keypress, if there is one
+
+		c := 0;
+		while (ScrKeyHit())
+			c := ScrGetCh();
+		
+		head := head + vector;
+		if ((head < 0) or (head >= sizeof(grid)))
+			return;
+		if (grid[head] == 2)
+		{
+			growth := growth + 5;
+			new_goal();
+		}
+		else if (grid[head] != 0)
+			return;
+			
+		if (c == KEY_ESCAPE)
+			return;
+		else if (c == KEY_LEFT)
+			vector := -1;
+		else if (c == KEY_RIGHT)
+			vector := 1;
+		else if (c == KEY_UP)
+			vector := 0-gridwidth;
+		else if (c == KEY_DOWN)
+			vector := gridwidth;
+			
+		grid[head] := vector;
+		
+		ScrSetFGBG(0, 7);
+		draw_pixel(head, 0);
+		
+		if (growth > 0)
+		{
+			score := score + 1;
+			growth := growth - 1;
+		}
+		else
+		{
+			ScrSetFGBG(7, 0);
+			draw_pixel(tail, 0);
+			c := grid[tail];
+			grid[tail] := 0;
+			tail := tail + c;
+		}
+		
+	}
+}
+
+// --- Main program -----------------------------------------------------------
+
+function void main
+{
+	if (!HasScr())
+	{
+		PrintString(stderr, "This program requires the SCR UI module.\n");
+		AppExit(-1);
+	}
+	
+	ScrInit();
+	gridwidth := (ScrWidth()/2) - 1;
+	gridheight := ScrHeight() - 3;
+	sizeof(grid) := gridwidth * gridheight;
+	
+	while(1)
+	{
+		draw_title();
+
+		// Initialise for a game
+	
+		clear_grid();
+		draw_game_area();
+		score := 0;
+		growth := 5;
+		delay := 100;
+		head := gridwidth*(gridheight/2) + gridwidth/2;
+		tail := head;
+		vector := 0-gridwidth;
+		grid[head] := vector;
+		new_goal();
+		draw_static_bar();
+	
+		// Actually play a game
+
+		main_loop();
+
+		// Do the Game Over stuff
+
+		draw_gameover();
+	}
+}
+
+end;

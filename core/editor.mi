@@ -1,0 +1,863 @@
+// ME
+// The Mercat Editor
+// (C) 1998 David Given
+// This is primarily a demo program, though with a bit of work it could be a
+// fully functional full-screen editor. The menu bar library which is currently
+// integrated into this program will eventually be exported as a stand-alone
+// library, though without function pointers it can't be properly abstracted.
+
+library standard;
+library scr;
+library scrx;
+
+// ===========================================================================
+//                            MENU BAR LIBRARY
+// ===========================================================================
+
+// Describes an entry in a menu.
+
+structure MenuItem := {
+	string label;		// Thing that is displayed in the menu
+	int mnemonic;		// Quick-access character
+	int event;		// Event code
+};
+
+// Describes a complete menu.
+
+structure Menu := {
+	string label;		// Menu title
+	int mnemonic;		// Quick-access character
+	array MenuItem item;	// Entries in menu
+	int x;			// X ordinate of menu
+	int width;		// Width of menu
+};
+
+// --- Initialise a menubar --------------------------------------------------
+
+function void MenuInitialise
+	array Menu menubar;
+{
+	int i;
+	int j;
+	int x := 1;
+	int w;
+	string label;
+
+	for(i:=0; i<sizeof(menubar); i:=i+1)
+	{
+		menubar[i].x := x;
+		w := sizeof(menubar[i].label);
+		x := x + 2 + w;
+		for(j:=0; j<sizeof(menubar[i].item); j:=j+1)
+		{
+			label := menubar[i].item[j].label;
+			if (sizeof(label) > w)
+				w := sizeof(label);
+		}
+		menubar[i].width := w;
+	}
+}
+
+// --- Output a string with highlight ----------------------------------------
+
+function void MenuWriteHighlighted
+	string msg;
+	string high;
+	int fg;
+	int bg;
+	int hfg;
+{
+	string c;
+	int size := sizeof(msg);
+	int i;
+
+	high := StringUpper(high);
+	ScrSetBG(bg);
+	for(i:=0; i<size; i:=i+1)
+	{
+		c := msg[i];
+		if (high == StringUpper(c))
+		{
+			ScrSetFG(hfg);
+			high := "";
+		}
+		else
+			ScrSetFG(fg);
+		ScrPutStr(c);
+	}
+}
+
+// --- Draws the status bar --------------------------------------------------
+
+function void MenuSetStatus
+	string s;
+{
+	ScrSetFGBG(0, 6);
+	ScrGotoXY(0, ScrHeight()-1);
+	ScrPutStr(StringDup(ScrWidth(), " "));
+	ScrGotoXY(1, ScrHeight()-1);
+	ScrPutStr(s);
+}
+	
+// --- Draws a menubar -------------------------------------------------------
+
+function void MenuBarDraw
+	array Menu menubar;
+{
+	int i;
+	
+	ScrSetFGBG(0, 6);
+	ScrGotoXY(0, 0);
+	ScrPutStr(StringDup(ScrWidth(), " "));
+	for(i:=0; i<sizeof(menubar); i:=i+1)
+	{
+		ScrGotoXY(menubar[i].x, 0);
+		ScrPutStr(" ");
+		MenuWriteHighlighted(menubar[i].label, ByteString(menubar[i].mnemonic), 0, 6, 7);
+		ScrPutStr("  ");
+	}
+}
+
+// --- Get a character and process events ------------------------------------
+
+function int MenuGetCh
+	array Menu menubar;
+{
+	int key := ScrGetCh();
+	int pkey;
+	int i;
+
+	if (key >= 512)
+	{
+		// Possibly a menu event
+		pkey := key - 512;
+		if ((pkey >= 97) and (pkey <= 122))
+			pkey := pkey - 32;
+		if ((pkey >= 65) and (pkey <= 90))
+		{
+			for (i:=0; i<sizeof(menubar); i:=i+1)
+				if (menubar[i].mnemonic == pkey)
+					return MenuProcess(menubar, i);
+		}
+	}
+	return key;
+}
+
+// --- Looks up a shortcut in a menu -----------------------------------------
+
+function int MenuFindEntryFromShortcut
+	array MenuItem menu;
+	int shortcut;
+{
+	int size := sizeof(menu);
+	int i;
+
+	for (i:=0; i<size; i:=i+1)
+		if (menu[i].mnemonic == shortcut)
+			return i;
+	return -1;
+}
+
+// --- Opens and processes a menu --------------------------------------------
+
+function int MenuProcess
+	array Menu menubar;
+	int menuid;
+{
+	int key;
+	array MenuItem menu := menubar[menuid].item;
+	array string element;
+	int x := menubar[menuid].x;
+	int y;
+	int i;
+	int index;
+	int width := menubar[menuid].width;
+
+	// Highlight entry in menu bar
+
+	ScrSetFGBG(7, 0);
+	ScrGotoXY(x, 0);
+	ScrPutStr(" ");
+	ScrPutStr(menubar[menuid].label);
+	ScrPutStr(" ");
+	ScrSetFGBG(0, 6);
+	ScrPutStr(" ");
+
+	// Build quick-reference array
+
+	sizeof(element) := sizeof(menu);
+	for(i:=0; i<sizeof(menu); i:=i+1)
+	{
+		if (menu[i].label == "")
+			element[i] := StringDup(width+2, "-");
+		else
+		{
+			element[i] := " " + menu[i].label;
+			element[i] := element[i] +
+				StringDup(1 + width - sizeof(menu[i].label), " ");
+		}
+	}
+
+	// Draw menu
+
+	ScrSetFGBG(0, 6);
+	ScrGotoXY(x-1, 1);
+	ScrPutStr(StringDup(width+4, " "));
+	for (i:=0; i<sizeof(menu); i:=i+1)
+	{
+		ScrGotoXY(x-1, i+2);
+		ScrPutStr(" ");
+		MenuWriteHighlighted(element[i], ByteString(menu[i].mnemonic), 0, 6, 7);
+		ScrPutStr(" ");
+	}
+	ScrGotoXY(x-1, 2+sizeof(menu));
+	ScrPutStr(StringDup(width+4, " "));
+
+	index := 0;
+	do {
+		// Highlight entry
+
+		ScrGotoXY(x, index+2);
+		MenuWriteHighlighted(element[index], ByteString(menu[index].mnemonic), 7, 0, 6);
+		ScrGotoXY(x+1, index+2);
+
+		key := ScrGetCh();
+
+		// Restore entry to normal
+
+		ScrGotoXY(x, index+2);
+		MenuWriteHighlighted(element[index], ByteString(menu[index].mnemonic), 0, 6, 7);
+
+		// Process keypress
+
+		if ((key == KEY_UP) and (index > 0))
+			index := index - 1;
+		else if ((key == KEY_DOWN) and (index < (sizeof(menu)-1)))
+			index := index + 1;
+		else if (key == KEY_LEFT)
+		{
+			MenuBarDraw(menubar);
+			MenuUserRedraw(1, sizeof(menu)+2);
+			menuid := menuid - 1;
+			if (menuid < 0)
+				menuid := sizeof(menubar)-1;
+			return MenuProcess(menubar, menuid);
+		}
+		else if (key == KEY_RIGHT)
+		{
+			MenuBarDraw(menubar);
+			MenuUserRedraw(1, sizeof(menu)+2);
+			menuid := menuid + 1;
+			if (menuid >= sizeof(menubar))
+				menuid := 0;
+			return MenuProcess(menubar, menuid);
+		}
+		else if ((key == 13) or (key == 10))
+		{
+			MenuBarDraw(menubar);
+			MenuUserRedraw(1, sizeof(menu)+2);
+			return menu[index].event;
+		}
+		else if ((key == 539) or (key == 27))
+		{
+			MenuBarDraw(menubar);
+			MenuUserRedraw(1, sizeof(menu)+2);
+			return 0;
+		}
+		else
+		{
+			key := MenuFindEntryFromShortcut(menu,
+				StringByte(StringUpper(ByteString(key))));
+			if (key != -1)
+			{
+				MenuBarDraw(menubar);
+				MenuUserRedraw(1, sizeof(menu)+2);
+				return menu[key].event;
+			}
+		}
+	} while(1);
+
+	MenuBarDraw(menubar);
+	MenuUserRedraw(1, sizeof(menu)+2);
+	return key;
+}
+
+// --- Add a menu -------------------------------------------------------------
+
+function array MenuItem MenuAddMenu
+	array Menu menubar;
+	string name;
+	string mnemonic;
+{
+	int i := sizeof(menubar);
+	Menu menu;
+
+	sizeof(menubar) := i+1;
+	menubar[i] := menu;
+	menu.label := name;
+	menu.mnemonic := StringByte(mnemonic);
+	menu.item := create(array MenuItem);
+
+	return menu.item;
+}
+
+// --- Add an item to an existing menu ----------------------------------------
+
+function void MenuAddMenuItem
+	array MenuItem menu;
+	string name;
+	string mnemonic;
+	int event;
+{
+	int i := sizeof(menu);
+	MenuItem menuitem;
+
+	sizeof(menu) := i+1;
+	menu[i] := menuitem;
+	menuitem.label := name;
+	menuitem.mnemonic := StringByte(mnemonic);
+	menuitem.event := event;
+}
+
+// ===========================================================================
+//                        EDITOR GLOBAL VARIABLES
+// ===========================================================================
+
+// --- Buffer structure ------------------------------------------------------
+
+structure Buffer := {
+	string name;		// Name of buffer
+	int sx;			// Cursor x ordinate
+	int sy;			// Cursor y ordinate
+	int bx;			// Buffer x ordinate of first visible column
+	int by;			// Buffer y ordinate of first visible line
+	array string line;	// The data itself
+};
+
+global Buffer buffer;		// Current buffer
+
+// --- Events ----------------------------------------------------------------
+
+global int EVENT_EXIT			:= $1000;
+global int EVENT_LOAD			:= $1001;
+global int EVENT_SAVE			:= $1002;
+
+// --- Create the global menubar ---------------------------------------------
+
+global array Menu menubar := init_menubar();
+function array Menu init_menubar
+{
+	array Menu menubar;
+	array MenuItem menu;
+
+	// File menu
+
+	menu := MenuAddMenu(menubar, "File", "F");
+	MenuAddMenuItem(menu,	"Load",		"L", EVENT_LOAD);
+	MenuAddMenuItem(menu,	"Save",		"S", EVENT_SAVE);
+	MenuAddMenuItem(menu,	"",		"", 0);
+	MenuAddMenuItem(menu,	"Exit",		"X", EVENT_EXIT);
+
+	return menubar;
+}
+
+// ===========================================================================
+//                           REDRAW MAIN WINDOW
+// ===========================================================================
+
+// --- Redraw a single line --------------------------------------------------
+
+function void redraw_line
+	int y;
+	int i;
+	array string line;
+{
+	if (i < sizeof(line))
+		ScrSetFGBG(7, 4);
+	else
+		ScrSetFGBG(7, 0);
+	ScrClearArea(0, y, ScrWidth()-1, y);
+	ScrGotoXY(0, y);
+	if (i < sizeof(line))
+		ScrPutStr(StringMid(line[i], buffer.bx, ScrWidth()));
+}
+
+function void MenuUserRedraw
+	int y1;
+	int y2;
+{
+	int by := buffer.by;
+	int bx := buffer.bx;
+	int sy := buffer.sy;
+	array string line := buffer.line;
+	int y;
+	int my;
+	
+	if (y2 == -1)
+		y2 := y1;
+	my := y2 - y1;
+
+//	ScrGotoXY(0, 0);
+//	ScrPutStr(IntToString(by));
+//	ScrPutStr(", ");
+//	ScrPutStr(IntToString(sy));
+//	ScrPutStr(", ");
+//	ScrPutStr(IntToString(y1));
+//	ScrPutStr(", ");
+//	ScrPutStr(IntToString(y2));
+//	ScrPutStr(" ");
+	
+//	if ((by+my+y1-1) >= sizeof(line))
+//	{
+//		ScrSetFGBG(7, 0);
+//		ScrClearArea(0, sizeof(line)-by+y1+1, ScrWidth()-1, y2);
+//		my := sizeof(line)-by;
+//	}
+	
+//	ScrSetFGBG(7, 4);
+//	ScrClearArea(0, y1, ScrWidth()-1, y1+my);
+
+	for(y:=0; y<=my; y:=y+1)
+		redraw_line(y1+y, by+y1+y-1, line);
+}
+
+// ===========================================================================
+//                          BUFFER MANIPULATION
+// ===========================================================================
+
+// --- Insert some text ------------------------------------------------------
+
+function void insert_character
+	string c;
+{
+	int sy := buffer.sy;
+	int sx := buffer.sx;
+	string s;
+
+	if (sy >= sizeof(buffer.line))
+	{
+		sizeof(buffer.line) := sy+1;
+		buffer.line[sy] := c;
+		sx := sx + sizeof(c);
+	}
+	else
+	{
+		s := buffer.line[sy];
+		if (sx == 0)
+			s := c + s;
+		else if (sx >= sizeof(s))
+			s := s + c;
+		else
+			s := StringMid(s, 0, sx) + c + StringMid(s, sx, -1);
+		sx := sx + sizeof(c);
+		buffer.line[sy] := s;
+	}
+
+	buffer.sx := sx;
+	if (!rationalise_cursor())
+	{
+//		ScrGotoXY(0, 0);
+//		ScrPutStr(IntToString(1+buffer.sy-buffer.by));
+		MenuUserRedraw(1+buffer.sy-buffer.by, -1);
+	}
+}
+
+// --- Delete to left of cursor -----------------------------------------------
+
+function void delete_left
+{
+	int sy := buffer.sy;
+	int sx := buffer.sx;
+	array string line := buffer.line;
+	int size := sizeof(line[sy]);
+
+	if (sx == 0)
+	{
+		if (sy > 0)
+		{
+			sy := sy - 1;
+			buffer.sx := sizeof(line[sy]);
+			line[sy] := line[sy] + line[sy+1];
+			delete(line, sy+1, 1);
+			buffer.sy := sy;
+		}
+	}
+	else if (sx == size)
+	{
+		line[sy] := StringMid(line[sy], 0, size-1);
+		buffer.sx := sx - 1;
+	}
+	else
+	{
+		line[sy] := StringMid(line[sy], 0, sx-1) +
+			StringMid(line[sy], sx, -1);
+		buffer.sx := sx - 1;
+	}
+	if (!rationalise_cursor())
+		MenuUserRedraw(1+buffer.sy-buffer.by, ScrHeight()-2);
+}
+
+// --- Move cursor up ---------------------------------------------------------
+
+function void move_up
+	int n;
+{
+	int e;
+	buffer.sy := buffer.sy - n;
+	if (buffer.sy < 0)
+		buffer.sy := 0;
+	e := rationalise_cursor();
+}
+
+// --- Move cursor down -------------------------------------------------------
+
+function void move_down
+	int n;
+{
+	int e := sizeof(buffer.line);
+	buffer.sy := buffer.sy + n;
+	if (buffer.sy >= e)
+		buffer.sy := e-1;
+	e := rationalise_cursor();
+}
+
+// --- Move cursor left -------------------------------------------------------
+
+function void move_left
+	int n;
+{
+	int e;
+	buffer.sx := buffer.sx - n;
+	if (buffer.sx < 0)
+		buffer.sx := 0;
+	e := rationalise_cursor();
+}
+	
+// --- Move cursor right ------------------------------------------------------
+
+function void move_right
+	int n;
+{
+	int e := sizeof(buffer.line);
+	buffer.sx := buffer.sx + n;
+	if (buffer.sy > e)
+		buffer.sy := e;
+	e := rationalise_cursor();
+}
+
+// --- Move to beginning of line ----------------------------------------------
+
+function void move_home
+{
+	int e;
+	buffer.sx := 0;
+	e := rationalise_cursor();
+}
+
+// --- Move to end of line ----------------------------------------------------
+
+function void move_end
+{
+	int e;
+	buffer.sx := sizeof(buffer.line[buffer.sy]);
+	e := rationalise_cursor();
+}
+
+// --- Insert a CR ------------------------------------------------------------
+
+function void insert_cr
+{
+	int e := sizeof(buffer.line);
+	string left := buffer.line[buffer.sy];
+	string right;
+
+	if (buffer.sy < (e-1))
+		insert(buffer.line, buffer.sy+1, 1);
+	else
+		sizeof(buffer.line) := e+1;
+
+	right := StringMid(left, buffer.sx, -1);
+	left := StringMid(left, 0, buffer.sx);
+
+	buffer.sx := 0;
+	buffer.line[buffer.sy] := left;
+	buffer.sy := buffer.sy + 1;
+	buffer.line[buffer.sy] := right;
+	if (!rationalise_cursor())
+		MenuUserRedraw(1+buffer.sx-buffer.bx, ScrHeight()-2);
+}
+
+// --- Adjust viewpoint and cursor --------------------------------------------
+
+function int rationalise_cursor
+{
+	int bx := buffer.bx;
+	int by := buffer.by;
+	int sx := buffer.sx;
+	int sy := buffer.sy;
+	string s := "";
+	int redraw := 0;
+
+	if (buffer.sy < sizeof(buffer.line))
+		s := buffer.line[buffer.sy];
+	if (buffer.sx > sizeof(s))
+		buffer.sx := sizeof(s);
+	if ((buffer.sx-buffer.bx) > (ScrWidth()-2))
+	{
+		buffer.bx := buffer.sx - ScrWidth() - 1;
+		redraw := 1;
+	}
+	if (buffer.sx < buffer.bx)
+	{
+		buffer.bx := buffer.sx;
+		redraw := 1;
+	}
+	if ((buffer.sy-buffer.by) > ScrHeight()-3)
+	{
+		buffer.by := buffer.sy - ScrHeight() - 3;
+		redraw := 1;
+	}
+	if (buffer.sy < buffer.by)
+	{
+		buffer.by := buffer.sy;
+		redraw := 1;
+	}
+	if (redraw)
+		MenuUserRedraw(1, ScrHeight()-2);
+	return redraw;
+}
+
+// ===========================================================================
+//                                UTILITIES
+// ===========================================================================
+
+// --- Expands tabs in a string ----------------------------------------------
+
+function string expand_tabs
+	string in;
+{
+	string out := "";
+	int i := 0;
+	int c;
+
+	while (i < sizeof(in))
+	{
+		c := StringByte(in[i]);
+		if (c == 9)
+		{
+			while ((sizeof(out) rem 8) != 7)
+				out := out + " ";
+			c := 32;
+		}
+		out := out + ByteString(c);
+		i := i + 1;
+	}
+
+	return out;
+}
+
+// --- Updates the status bar ------------------------------------------------
+
+function void update_status
+{
+	MenuSetStatus("Col: " + IntToString(buffer.sx) + "/"
+		+ IntToString(sizeof(buffer.line[buffer.sy]))
+		+ "  Row: " + IntToString(buffer.sy) + "/"
+		+ IntToString(sizeof(buffer.line)));
+}
+
+// ===========================================================================
+//                              MAIN PROGRAM
+// ===========================================================================
+
+// --- Loads a file ----------------------------------------------------------
+
+function void file_load
+{
+	string newname;
+	int fh;
+	int i;
+	
+	MenuSetStatus("Enter filename to load:");
+	ScrSetFGBG(7, 1);
+	newname := ScrXReadString(25, ScrHeight()-1, ScrWidth()-25, "");
+	if (newname == "")
+	{
+		MenuSetStatus("Operation cancelled");
+		return;
+	}
+	
+	MenuSetStatus("Loading file");
+	fh := StreamOpenFile(newname, "r");
+	if (fh == 0)
+	{
+		MenuSetStatus("Operation failed: " + AppGetErrorString());
+		return;
+	}
+
+	buffer.name := newname;
+	buffer.sx := 0;
+	buffer.sy := 0;
+	buffer.bx := 0;
+	buffer.by := 0;
+	buffer.line := create(array string);
+
+	i := 0;
+	while (!StreamEOF(fh))
+	{
+		sizeof(buffer.line) := i + 1;
+		buffer.line[i] := expand_tabs(StreamReadLine(fh));
+		if ((i rem 100) == 0)
+			MenuSetStatus("Loading file (" + IntToString((100*StreamTell(fh))/StreamLength(fh)) + "%)");
+		i := i + 1;
+	}
+	if (i == 0)
+	{
+		sizeof(buffer.line) := 1;
+		buffer.line[0] := "";
+	}
+
+	StreamClose(fh);
+
+	MenuSetStatus("File successfully loaded");
+	MenuUserRedraw(1, ScrHeight()-2);
+}
+
+// --- Saves a file ----------------------------------------------------------
+
+function void file_save
+{
+	string newname;
+	int fh;
+	int i;
+	
+	MenuSetStatus("Enter filename to save:");
+	ScrSetFGBG(7, 1);
+	newname := ScrXReadString(25, ScrHeight()-1, ScrWidth()-25, buffer.name);
+	if (newname == "")
+	{
+		MenuSetStatus("Operation cancelled");
+		return;
+	}
+	
+	MenuSetStatus("Saveing file");
+	fh := StreamOpenFile(newname, "w");
+	if (fh == 0)
+	{
+		MenuSetStatus("Operation failed: " + AppGetErrorString());
+		return;
+	}
+
+	for(i:=0; i<sizeof(buffer.line); i:=i+1)
+	{
+		PrintString(fh, buffer.line[i]);
+		PrintNL(fh);
+		if ((i rem 100) == 0)
+			MenuSetStatus("Saveing file (" + IntToString((100*i)/sizeof(buffer.line)) + "%)");
+	}
+
+	StreamClose(fh);
+
+	MenuSetStatus("File successfully saved");
+	MenuUserRedraw(1, ScrHeight()-2);
+}
+
+// --- Main program itself --------------------------------------------------
+
+function void main
+{
+	int e;
+
+	if (!HasScr())
+	{
+		PrintString(stderr, "This program requires the SCR UI module.\n");
+		AppExit(-1);
+	}
+
+	buffer := create(Buffer);
+	buffer.name := "";
+	buffer.sx := 0;
+	buffer.sy := 0;
+	buffer.bx := 0;
+	buffer.by := 0;
+	buffer.line := create(array string);
+	sizeof(buffer.line) := 1;
+	buffer.line[0] := "";
+
+	ScrInit();
+	MenuInitialise(menubar);
+	MenuBarDraw(menubar);
+	MenuUserRedraw(1, ScrHeight()-2);
+	MenuSetStatus("ME V0.1 (C) 1998 David Given");
+	do {
+		ScrGotoXY(buffer.sx-buffer.bx, 1+buffer.sy-buffer.by);
+		e := MenuGetCh(menubar);
+		if ((e>=32) and (e<=126))
+		{
+			insert_character(ByteString(e));
+			update_status();
+		}
+		else if (e == KEY_BACKSPACE)
+		{
+			delete_left();
+			update_status();
+		}
+		else if (e == KEY_UP)
+		{
+			move_up(1);
+			update_status();
+		}
+		else if (e == KEY_DOWN)
+		{
+			move_down(1);
+			update_status();
+		}
+		else if (e == KEY_PGUP)
+		{
+			move_up(ScrHeight() - 2);
+			update_status();
+		}
+		else if (e == KEY_PGDN)
+		{
+			move_down(ScrHeight() - 2);
+			update_status();
+		}
+		else if (e == KEY_LEFT)
+		{
+			move_left(1);
+			update_status();
+		}
+		else if (e == KEY_RIGHT)
+		{
+			move_right(1);
+			update_status();
+		}
+		else if (e == KEY_ENTER)
+		{
+			insert_cr();
+			update_status();
+		}
+		else if (e == KEY_HOME)
+		{
+			move_home();
+			update_status();
+		}
+		else if (e == KEY_END)
+		{
+			move_end();
+			update_status();
+		}
+		else if (e == EVENT_LOAD)
+			file_load();
+		else if (e == EVENT_SAVE)
+			file_save();
+		else if (e == EVENT_EXIT)
+			break;
+	} while (1);
+
+	ScrSetFGBG(7, 0);
+	ScrClear();
+	ScrShutdown();
+}
+
+end;

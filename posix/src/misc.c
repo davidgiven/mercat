@@ -91,12 +91,13 @@ void msg(int type, char *format, ...)
 void fatalError(int exitcode, char *message)
 {
 	msg(MSG_FATAL, message);
+	if (lineno != -1)
+		msg(MSG_FATAL, "Program has debugging information: error at line %d", lineno);
+	fflush(stdout);
+	fflush(stderr);
 #ifdef DEBUG
 	msg(MSG_FATAL, "Exiting with error code %d", exitcode);
-	fflush(stderr);
 	abort();
-	/* Forces a crash (on systems with memory protection) */
-//	((function)(0))();
 #else
 	exit(exitcode);
 #endif

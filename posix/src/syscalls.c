@@ -10,6 +10,9 @@
 #include "syscall/convert.h"
 #include "syscall/stringop.h"
 #include "syscall/number.h"
+#include "syscall/scr.h"
+#include "syscall/time.h"
+#include "syscall/internet.h"
 
 static struct {
 	char* name;
@@ -21,6 +24,9 @@ static struct {
 	CONVERT
 	STRINGOP
 	NUMBER
+	SCR
+	TIME
+	INTERNET
 	{NULL, NULL}
 };
 
@@ -41,3 +47,4 @@ function lookupSyscall(char *name)
 	fatalError(FATAL_SYSCALL, "Unimplemented system call");
 	return NULL;
 }
+

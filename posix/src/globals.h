@@ -2,13 +2,71 @@
  * Global declarations
  */
 
+/* Funky compatibility stuff. */
+
+#ifdef __BORLANDC__
+#ifndef MSDOS
+#define MSDOS
+#endif
+#endif
+
+#ifdef __MSDOS__
+#ifndef MSDOS
+#define MSDOS
+#endif
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
+#ifndef MSDOS
+#include <unistd.h>
+#endif
 #include <string.h>
+
+/* This is where we set the data types. The system assumes a 32-bit machine
+ * unless you tell it otherwise. */
+
+#ifdef __BORLANDC__
+typedef unsigned char	byte;		/* 8-bit signed */
+typedef char		int8;		/* 8-bit signed */
+typedef byte		uint8;		/* 8-bit unsigned */
+typedef short		int16;		/* 16-bit signed */
+typedef unsigned short	uint16;		/* 16-bit unsigned */
+typedef long		int32;		/* 32-bit signed */
+typedef unsigned long	uint32;		/* 32-bit unsigned */
+#else
+typedef unsigned char	byte;		/* 8-bit signed */
+typedef char		int8;		/* 8-bit signed */
+typedef byte		uint8;		/* 8-bit unsigned */
+typedef short		int16;		/* 16-bit signed */
+typedef unsigned short	uint16;		/* 16-bit unsigned */
+typedef int		int32;		/* 32-bit signed */
+typedef unsigned int	uint32;		/* 32-bit unsigned */
+#endif
+
+/* Autodetects the printf modifier needed to output a long. */
+
+#ifdef __BORLANDC__
+#define LONGFORMAT "l"
+#else
+#define LONGFORMAT ""
+#endif
+
+/* Autodetects whether we support the `inline' keyword. */
+
+#ifdef __GNUC__
+#define INLINE static inline
+#endif
 
 #include "config.h"
 
+/* Tucked away in the depths of the GNU include files are definitions for
+ * uchar and uint. This is for systems that don't have them. */
+
+#ifndef linux
+typedef byte uchar;
 typedef unsigned int uint;
+#endif
 
 typedef void(*function)(void);
 
@@ -139,10 +197,14 @@ extern Object* CreateIntArray(void);
 extern Object* CreateObjArray(void);
 extern Object* CreateIntDict(void);
 extern Object* CreateObjDict(void);
+extern Object* CreateOInt(int);
+extern int ExtractOInt(Object*);
 
 extern Object* StringConcat(Object*, Object*);
 extern int StringCompare(Object*, Object*);
 extern void ArrayResize(Object*, int32);
+extern void ArrayInsert(Object*, int32, int32);
+extern void ArrayDelete(Object*, int32, int32);
 extern void ArraySetByte(Object*, int32, int32);
 extern void ArraySetInt(Object*, int32, int32);
 extern void ArraySetObj(Object*, int32, Object*);
@@ -169,6 +231,7 @@ extern function lookupSyscall(char*);
 
 extern char* opcodeName(int);
 
+extern void GCInit(void);
 extern Object* GCAllocObj(void);
 extern void GCCheck(void);
 extern void GCCollect(void);

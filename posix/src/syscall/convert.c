@@ -101,6 +101,22 @@ void sys_DictToArray(void)
 	pusho(c);
 }
 
+void sys_IsHexDigit(void)
+{
+	Object* o = popo();
+	int v;
+
+	CheckObjType(o, OBJ_STRING);
+	if (o->size == 0)
+		v = 0;
+	else
+	{
+		v = *(char*)o->ptr;
+		v = isdigit(v) || ((v>='a') && (v<='f')) || ((v>='A') && (v<='F'));
+	}
+	pushi(v);
+}
+
 void sys_IsDigit(void)
 {
 	Object* o = popo();
@@ -109,7 +125,8 @@ void sys_IsDigit(void)
 	CheckObjType(o, OBJ_STRING);
 	if (o->size == 0)
 		v = 0;
-	v = isdigit(*(char*)o->ptr);
+	else
+		v = isdigit(*(char*)o->ptr);
 	pushi(v);
 }
 

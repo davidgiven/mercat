@@ -11,27 +11,27 @@ enum {
 	OP_SUB,
 	OP_MUL,
 	OP_DIV,
-	OP_REM,
+	OP_REM,		/* 5 (20) */
 	OP_AND,
 	OP_OR,
 	OP_XOR,
 	OP_SHL,
-	OP_SHR,
+	OP_SHR,		/* 10 (40) */
 	OP_BEQ,
 	OP_BNE,
 	OP_BLT,
 	OP_BLE,
-	OP_BGT,
+	OP_BGT,		/* 15 (60) */
 	OP_BGE,
 	OP_JUMP,
 	OP_CALL,
 	OP_SYS,
-	OP_GETA,
+	OP_GETA,	/* 20 (80) */
 	OP_SETA,
 	OP_PEEKI,
 	OP_POKEI,
 	OP_PEEKO,
-	OP_POKEO,
+	OP_POKEO,	/* 25 (100) */
 	OP_LINE,
 
 	OP_PUSHI1 = 200,	/* 200 */
@@ -63,7 +63,14 @@ enum {
 	OP_GETD,
 	OP_SETD,
 	OP_STATD,		/* 230 */
-	OP_ISNIL
+	OP_ISNIL,
+	OP_DUPI,
+	OP_DUPO,
+	OP_I2O,
+	OP_O2I,			/* 235 */
+	OP_INSERTARRAY,
+	OP_DELETEARRAY,
+	OP_DELETEDICT
 };
 
 #endif

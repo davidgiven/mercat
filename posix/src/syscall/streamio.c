@@ -97,6 +97,12 @@ void sys_StreamSeek(void)
 	fseek(stream, pos, SEEK_SET);
 }
 
+void sys_StreamTell(void)
+{
+	FILE* stream = get_stream(popi());
+	pushi(ftell(stream));
+}
+
 void sys_StreamFlush(void)
 {
 	FILE* stream = get_stream(popi());

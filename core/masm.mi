@@ -5,133 +5,6 @@
 
 library standard;
 
-// --- Prototypes ------------------------------------------------------------
-
-inline array string AppGetArguments
-{"sys AppGetArguments"}
-
-inline string AppGetErrorString
-{"sys AppGetErrorString"}
-
-inline void AppExit
-	int exitcode;
-{"sys AppExit"}
-
-inline void PrintString
-	int stream;
-	string message;
-{"sys PrintString"}
-
-inline void PrintInt
-	int stream;
-	int value;
-{"sys PrintInt"}
-
-inline void PrintNL
-	int stream;
-{"sys PrintNL"}
-
-inline int StreamOpenFile
-	string filename;
-	string flags;
-{"sys StreamOpenFile"}
-
-inline void StreamClose
-	int stream;
-{"sys StreamClose"}
-
-inline string StreamReadChar
-	int stream;
-{"sys StreamReadChar"}
-
-inline void StreamWriteByte
-	int stream;
-	int value;
-{"sys StreamWriteByte"}
-
-inline string StreamReadLine
-	int stream;
-{"sys StreamReadLine"}
-
-inline void StreamSeek
-	int stream;
-	int pos;
-{"sys StreamSeek"}
-
-inline int IsWhiteSpace
-	string s;
-{"sys IsWhiteSpace"}
-
-inline int IsDigit
-	string s;
-{"sys IsDigit"}
-
-inline int IsAlpha
-	string s;
-{"sys IsAlpha"}
-
-inline int IsAlphaNumeric
-	string s;
-{"sys IsAlphaNumeric"}
-
-inline int StringToInt
-	string s;
-{"pushi 10\n
-sys StringToIntRadix"}
-
-inline int StringToIntRadix
-	string s;
-	int radix;
-{"sys StringToIntRadix"}
-
-inline string IntToString
-	int l;
-{"pushi 10\n
-sys IntToStringRadix"}
-
-inline string IntToStringRadix
-	int l;
-	int radix;
-{"sys IntToStringRadix"}
-
-inline string StringMid
-	string s;
-	int from;
-	int to;
-{"sys StringMid"}
-
-inline int StringInstr
-	string s;
-	string target;
-	int start;
-{"sys StringInstr"}
-
-inline int StringByte
-	string s;
-{"sys StringByte"}
-
-inline string ByteString
-	int c;
-{"sys ByteString"}
-
-inline string StringStrip
-	string s;
-{"sys StringStrip"}
-
-inline void DebugPrintDictArrayInt
-	dict array int d;
-{"sys DebugPrintObj"}
-
-inline void DebugPrintDictInt
-	dict int d;
-{"sys DebugPrintObj"}
-
-endprotos
-
-global int stdin := 0;
-global int stdout := 1;
-global int stderr := 2;
-
 // --- Global variables ------------------------------------------------------
 
 global int infile := 0;
@@ -139,11 +12,12 @@ global int outfile := 0;
 
 // Op structure
 
-global int OP_VALUE := 0;
-global int OP_AMODE := 1;
-global int OP__SIZE := 2;
+structure Opcode := {
+	int value;
+	int amode;
+};
 
-global dict array int op;
+global dict Opcode op;
 
 // Addressing modes
 
@@ -160,7 +34,7 @@ global int A_COMMENT	:= 12;
 
 // State
 
-global int pass	:= 0;	// The current pass number
+global int pass		:= 0;	// The current pass number
 global int errors	:= 0;	// Set to report errors
 global int codegen	:= 1;	// Set to generate code
 global int changeflag	:= 2;	// Set if a symbol has changed
@@ -269,15 +143,14 @@ function string escape
 
 // Create a single OP structure.
 
-function array int CreateOp
+function Opcode CreateOp
 	int value;
 	int amode;
 {
-	array int a;
+	Opcode a;
 	
-	sizeof(a) := OP__SIZE;
-	a[OP_VALUE] := value;
-	a[OP_AMODE] := amode << 8;
+	a.value := value;
+	a.amode := amode << 8;
 	
 	return a;
 }
@@ -288,65 +161,73 @@ function void LoadOps
 {
 	int p := 0;
 	
-	op["pushi"]		:= CreateOp(p, A_PUSHI);	 p := p + 4;
-	op["add"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["sub"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["mul"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["div"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["rem"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["and"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["or"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["xor"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["shl"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["shr"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["beq"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["bne"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["blt"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["ble"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["bgt"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["bge"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["jump"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["call"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
-	op["sys"]		:= CreateOp(p, A_SYS);		 p := p + 4;
-	op["geta"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["seta"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["peeki"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["pokei"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["peeko"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["pokeo"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
-	op["line"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["pushi"]		:= CreateOp(p, A_PUSHI);	p := p + 4;
+	op["add"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["sub"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["mul"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["div"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["rem"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["and"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["or"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["xor"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["shl"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["shr"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["beq"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["bne"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["blt"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["ble"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["bgt"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["bge"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["jump"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["call"]		:= CreateOp(p, A_OFFSET);	p := p + 4;
+	op["sys"]		:= CreateOp(p, A_SYS);		p := p + 4;
+	op["geta"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["seta"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["peeki"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["pokei"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["peeko"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["pokeo"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
+	op["line"]		:= CreateOp(p, A_COMPLEX);	p := p + 4;
 	
 	p := 200;
-	op["pushi1"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["pushi-1"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["pusho"]		:= CreateOp(p, A_PUSHO);	 p := p + 3;
-	op["not"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["itb"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["return"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["concat"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["popi"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["popo"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["halt"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["savei"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["saveo"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["loadi"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["loado"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["pushfp"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["strcmp"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["resize"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_nil"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_abyte"]	:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_aint"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_aobj"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["size"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["neg"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_dbyte"]	:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_dint"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["push_dobj"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["getd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["setd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-	op["statd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
-
+	op["pushi1"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["pushi-1"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["pusho"]		:= CreateOp(p, A_PUSHO);	p := p + 3;
+	op["not"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["itb"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["return"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["concat"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["popi"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["popo"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["halt"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["savei"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["saveo"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["loadi"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["loado"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["pushfp"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["strcmp"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["resize"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_nil"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_abyte"]	:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_aint"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_aobj"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["size"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["neg"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_dbyte"]	:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_dint"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["push_dobj"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["getd"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["setd"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["statd"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["isnil"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["dupi"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["dupo"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["i2o"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["o2i"]		:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["insert_array"]	:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["delete_array"]	:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	op["delete_dict"]	:= CreateOp(p, A_SIMPLE);	p := p + 1;
+	
 	op["#"]			:= CreateOp(-1, A_COMMENT);
 	op[":"]			:= CreateOp(-1, A_CONSTANT);
 	op["end"]		:= CreateOp(-1, A_END);
@@ -363,12 +244,6 @@ function void emit
 {
 	if (codegen)
 		StreamWriteByte(outfile, b);
-//	{
-//		PrintShort(stderr, pc);
-//		PrintString(stderr, " = ");
-//		PrintShort(stderr, b);
-//		PrintNL(stderr);
-//	}
 	pc := pc + 1;
 }
 
@@ -505,7 +380,7 @@ function void process
 			error("Unknown opcode `" + opcode + "'");
 		}
 		
-		i := op[opcode][OP_AMODE] >> 8;
+		i := op[opcode].amode >> 8;
 
 //		PrintInt(stderr, i);
 //		PrintString(stderr, ": ");
@@ -541,7 +416,7 @@ function void process
 function void op_simple
 	string opcode;
 {
-	emit(op[opcode][OP_VALUE]);
+	emit(op[opcode].value);
 }
 
 // Complex opcodes
@@ -551,9 +426,8 @@ function void op_complex
 	string argument;
 {
 	int l;
-	array int a := op[opcode];
-	int value := a[OP_VALUE];
-	int amode := a[OP_AMODE] and 255;
+	int value := op[opcode].value;
+	int amode := op[opcode].amode and 255;
 
 //	PrintString(stderr, opcode);
 //	PrintNL(stderr);
@@ -608,9 +482,8 @@ function void op_sys
 	string opcode;
 	string argument;
 {
-	array int a := op[opcode];
-	int value := a[OP_VALUE];
-	int amode := a[OP_AMODE] and 255;
+	int value := op[opcode].value;
+	int amode := op[opcode].amode and 255;
 	int l;
 	
 	if (argument == "")
@@ -717,7 +590,7 @@ function void op_pushi
 	}
 	else if (argument == "0")
 	{
-		emit(op["pushi"][OP_VALUE]);
+		emit(op["pushi"].value);
 		return;
 	}
 	op_complex("pushi", argument);
@@ -793,11 +666,11 @@ function void op_pusho
 		op_simple("pusho");
 	else if (size < 256)
 	{
-		emit(op["pusho"][OP_VALUE] + 1);
+		emit(op["pusho"].value + 1);
 		emit(size);
 		emit_string(argument);
 	} else {
-		emit(op["pusho"][OP_VALUE] + 2);
+		emit(op["pusho"].value + 2);
 		emit_short(size);
 		emit_string(argument);
 	}

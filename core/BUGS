@@ -1,0 +1,17 @@
+BUG FILE
+========
+
+This is an incomplete listing of bugs that I have noticed and haven't got round
+to fixing.
+
+---start---
+
+Operators of the same precedence are right-associative rather than left
+(1-1+2 == -2, not 2).
+
+Referencing a variable before it's allocated causes a crash --- a feature
+rather than a bug, but needs a compiler warning.
+
+System calls must be defined before where they are called, or the compiler
+generates a function call rather than a system call.
+

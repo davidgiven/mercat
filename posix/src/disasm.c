@@ -83,6 +83,13 @@ char* opcodeName(int op)
 			case OP_SETD:		return "setd";
 			case OP_STATD:		return "statd";
 			case OP_ISNIL:		return "isnil";
+			case OP_DUPI:		return "dupi";
+			case OP_DUPO:		return "dupo";
+			case OP_I2O:		return "i2o";
+			case OP_O2I:		return "o2i";
+			case OP_INSERTARRAY:	return "insert_array";
+			case OP_DELETEARRAY:	return "delete_array";
+			case OP_DELETEDICT:	return "delete_dict";
 
 			default:
 				return "??2";

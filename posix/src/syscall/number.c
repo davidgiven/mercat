@@ -10,7 +10,7 @@ void sys_RandomNumber(void)
 	pushi(rand() % popi());
 }
 
-void sys_RandomSeedRandom(void)
+void sys_RandomSetSeed(void)
 {
 	srand(time(NULL));
 }

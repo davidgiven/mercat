@@ -4,19 +4,44 @@
 
 #include "globals.h"
 
+#ifdef USE_STATIC_ALLOCATOR
+static Object* objtable;
+static Object* firstfree;
+#endif
+
 static Object* firstobj = NULL;
-static int objcount = 0;
+static int32 objcount = 0;
 
 /* --- Forward references ------------------------------------------------ */
 
 static void traverse(Object* o);
 
+/* --- Initialise allocator ---------------------------------------------- */
+
+void GCInit(void)
+{
+#ifdef USE_STATIC_ALLOCATOR
+	int32 i;
+
+	objtable = (Object*)mcalloc(GC_OBJECT_TABLE, sizeof(Object));
+	for(i=0; i<=GC_OBJECT_TABLE; i++)
+		objtable[i].next = &objtable[i+1];
+	objtable[GC_OBJECT_TABLE-1].next = NULL;
+
+	firstfree = objtable;
+#endif
+}
+
 /* --- Allocate an Object structure -------------------------------------- */
 
 Object* GCAllocObj(void)
 {
+#ifdef USE_STATIC_ALLOCATOR
+	Object* obj = firstfree;
+	firstfree = obj->next;
+#else
 	Object* obj = (Object*)mmalloc(sizeof(Object));
-
+#endif
 	obj->next = firstobj;
 	firstobj = obj;
 	objcount++;
@@ -24,12 +49,30 @@ Object* GCAllocObj(void)
 	return obj;
 }
 
+/* --- Free an Object structure ------------------------------------------ */
+
+void GCFreeObj(Object* obj)
+{
+#ifdef USE_STATIC_ALLOCATOR
+	obj->next = firstfree;
+	firstfree = obj;
+	objcount--;
+#else
+	mfree(obj);
+#endif
+}
+
 /* --- Check whether we need garbage collecting -------------------------- */
 
 void GCCheck(void)
 {
+#ifdef USE_STATIC_ALLOCATOR
+	if (objcount > (GC_OBJECT_TABLE*GC_THRESHOLD)/100)
+		GCCollect();
+#else
 	if (objcount > GC_THRESHOLD)
 		GCCollect();
+#endif
 }
 
 /* --- Garbage collect now ----------------------------------------------- */
@@ -96,7 +139,7 @@ void GCCollect(void)
 			o->magic = 0;
 			o1 = o;
 			o = o->next;
-			mfree(o1);
+			GCFreeObj(o1);
 		}
 		else
 		{
@@ -105,7 +148,9 @@ void GCCollect(void)
 		}
 	}
 	msg(MSG_GC, "GC: %d/%d = %d", count, total, total-count);
+#ifndef USE_STATIC_ALLOCATOR
 	objcount = 0;
+#endif
 }
 
 /* --- Traverse an object tree ------------------------------------------- */

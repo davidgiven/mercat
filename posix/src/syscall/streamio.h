@@ -6,6 +6,7 @@ extern void sys_StreamOpenFile(void);
 extern void sys_StreamClose(void);
 extern void sys_StreamLength(void);
 extern void sys_StreamSeek(void);
+extern void sys_StreamTell(void);
 extern void sys_StreamEOF(void);
 extern void sys_StreamFlush(void);
 extern void sys_StreamReadBlock(void);
@@ -21,6 +22,7 @@ extern void sys_PrintNL(void);
 	{"StreamClose",		sys_StreamClose},	\
 	{"StreamLength",	sys_StreamLength},	\
 	{"StreamSeek",		sys_StreamSeek},	\
+	{"StreamTell",		sys_StreamTell},	\
 	{"StreamFlush",		sys_StreamFlush},	\
 	{"StreamEOF",		sys_StreamEOF},		\
 	{"StreamReadBlock",	sys_StreamReadBlock},	\

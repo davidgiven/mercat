@@ -140,6 +140,12 @@ MERCAT_VERSION "\n"
 "\t-h\tPrint this message\n"
 "\t-m\tEnable a message\n"
 "\t-M\tDisable a message\n"
+"\n"
+"Messages:\n"
+"\tW\tWarnings\n"
+"\tF\tFile information\n"
+"\tG\tGarbage collection\n"
+"\tD\tDebugging messages\n"
 );
 	exit(FATAL_SYNTAX);
 }
@@ -237,7 +243,7 @@ int main(int argc, char* argv[])
 {
 	int optbase;
 
-	msgMask = 
+	msgMask = MSG_FATAL +
 #ifdef DEBUG
 	MSG_DEBUG + MSG_GC +
 #endif
@@ -265,6 +271,7 @@ int main(int argc, char* argv[])
 	msg(MSG_DEBUG, "Stack type allocated at %lX", stackType);
 	msg(MSG_DEBUG, "Call stack allocated at %lX", callStack);
 
+	GCInit();
 	load_arguments(argc-optbase, argv+optbase);
 
 	while (!halt)

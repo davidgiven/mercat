@@ -8,6 +8,7 @@ extern void sys_StringByte(void);
 extern void sys_ByteString(void);
 extern void sys_DictToArray(void);
 extern void sys_IsDigit(void);
+extern void sys_IsHexDigit(void);
 extern void sys_IsAlphaNumeric(void);
 extern void sys_IsWhiteSpace(void);
 
@@ -20,6 +21,7 @@ extern void sys_IsWhiteSpace(void);
 	{"ByteString",		sys_ByteString},		\
 	{"DictToArray",		sys_DictToArray},		\
 	{"IsDigit",		sys_IsDigit},			\
+	{"IsHexDigit",		sys_IsHexDigit},		\
 	{"IsAlphaNumeric",	sys_IsAlphaNumeric},		\
 	{"IsWhiteSpace",	sys_IsWhiteSpace},
 

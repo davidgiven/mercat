@@ -5,6 +5,8 @@
 #include "globals.h"
 #include <ctype.h>
 
+/* --- Remove leading & trailing spaces ------------------------------------ */
+
 void sys_StringStrip(void)
 {
 	Object* o = popo();
@@ -36,6 +38,8 @@ void sys_StringStrip(void)
 	pusho(CreateString(b, i));
 }
 
+/* --- Search for one string in another ------------------------------------ */
+
 void sys_StringInstr(void)
 {
 	int32 start = popi();
@@ -63,6 +67,8 @@ void sys_StringInstr(void)
 	} while(1);
 }
 
+/* --- Extract a substring ------------------------------------------------- */
+
 void sys_StringMid(void)
 {
 	int32 length = popi();
@@ -89,5 +95,74 @@ void sys_StringMid(void)
 	b = (char*)mmalloc(length);
 	memcpy(b, (char*)(o->ptr)+from, length);
 	pusho(CreateString(b, length));
+}
+
+/* --- Process a string ---------------------------------------------------- */
+
+static Object* process_string(Object* src, int(*func)(int))
+{
+	int i;
+	Object* dest;
+	char* newstring;
+	int size;
+
+	CheckObjType(src, OBJ_STRING);
+	size = src->size;
+	newstring = mmalloc(size);
+	if (size)
+		memcpy(newstring, src->ptr, size);
+	else
+		newstring = mmalloc(size);
+
+	dest = CreateString(newstring, size);
+	for(i=0; i<dest->size; i++)
+		newstring[i] = func(newstring[i]);
+	
+	return dest;
+}
+
+/* --- Convert a string to upper case -------------------------------------- */
+
+void sys_StringUpper(void)
+{
+	pusho(process_string(popo(), &toupper));
+}
+
+/* --- Convert a string to lower case -------------------------------------- */
+
+void sys_StringLower(void)
+{
+	pusho(process_string(popo(), &tolower));
+}
+
+/* --- Convert a string to a byte array ------------------------------------ */
+
+void sys_StringToByteArray(void)
+{
+	Object* string = popo();
+	Object* barray = CreateByteArray();
+
+	CheckObjType(string, OBJ_STRING);
+	ArrayResize(barray, string->size);
+	if (string->size)
+		memcpy(barray->ptr, string->ptr, string->size);
+	pusho(barray);
+}
+
+/* --- Convert a byte array to a string ------------------------------------ */
+
+void sys_ByteArrayToString(void)
+{
+	Object* barray = popo();
+	byte* data;
+
+	CheckObjType(barray, OBJ_BYTEARRAY);
+
+	if (barray->size > 65535)
+		fatalError(FATAL_SYSCALL, "Attempt to convert a byte array of more than 64kB to a string");
+
+	data = mmalloc(barray->size);
+	memcpy(data, barray->ptr, barray->size);
+	pusho(CreateString(data, barray->size));
 }
 

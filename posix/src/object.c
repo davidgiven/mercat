@@ -16,128 +16,11 @@ static void display_intdict(void* o1)
 }
 #endif
 
-#if 0
-void deref(int32 h)
-{
-	if (h2o(h)->magic != OBJ_MAGIC)
-		fatalError(FATAL_OBJTYPE, "Attempt to deref invalid object");
-	h2o(h)->refcount--;
-#ifdef DBGALLOC
-	msg(MSG_DEBUG, "ref count of %lX = %d", h, h2o(h)->refcount);
-#endif
-//	msg(MSG_DEBUG, "refcount = %d", h2o(h)->refcount);
-	if (h2o(h)->refcount == 0)
-	{
-		switch (h2o(h)->type)
-		{
-			case OBJ_STRING:
-#ifdef DBGALLOC
-				msg(MSG_DEBUG, "freeing string %lX", h);
-#endif
-				if (h2o(h)->ptr)
-					mfree(h2o(h)->ptr);
-				break;
-
-			case OBJ_SHORT:
-			case OBJ_LONG:
-				break;
-
-			case OBJ_BYTEARRAY:
-			case OBJ_SHORTARRAY:
-			case OBJ_LONGARRAY:
-#ifdef DBGALLOC
-				msg(MSG_DEBUG, "freeing array %lX", h);
-#endif
-				if (h2o(h)->ptr)
-					mfree(h2o(h)->ptr);
-				break;
-
-			case OBJ_OBJARRAY:
-#ifdef DBGALLOC
-				msg(MSG_DEBUG, "freeing object array %lX", h);
-#endif
-				if (h2o(h)->ptr)
-				{
-					int32 size = h2o(h)->size;
-					int32 i;
-					int32 *p = h2o(h)->ptr;
-					for(i=0; i<size; i++)
-						deref(p[i]);
-					mfree(p);
-				}
-				break;
-
-			case OBJ_SHORTDICT:
-			case OBJ_LONGDICT:
-#ifdef DBGALLOC
-				msg(MSG_DEBUG, "freeing dict %lX", h);
-#endif
-				{
-					AVLNode* node = h2o(h)->ptr;
-					DictNode* n;
-					while(node)
-					{
-						// AVLTree_Dump(node, display_shortdict, 0);
-						n = AVLTree_Delete(
-							&node, 		/* Root node */
-							NULL,		/* Comparison function */
-							NULL,		/* Item to search for */
-							NULL,		/* Changeflag */
-							-1);		/* Find minimum value */
-						// printf("\n");
-						// AVLTree_Dump(node, display_shortdict, 0);
-						if (n)
-						{
-							deref(n->key);
-							mfree(n);
-						}
-					}
-				}
-				break;
-
-			case OBJ_OBJDICT:
-#ifdef DBGALLOC
-				msg(MSG_DEBUG, "freeing obj dict %lX", h);
-#endif
-				{
-					AVLNode* node = h2o(h)->ptr;
-					DictNode* n;
-					while(node)
-					{
-						// AVLTree_Dump(node, display_shortdict, 0);
-						n = AVLTree_Delete(
-							&node, 		/* Root node */
-							NULL,		/* Comparison function */
-							NULL,		/* Item to search for */
-							NULL,		/* Changeflag */
-							-1);		/* Find minimum value */
-						// printf("\n");
-						// AVLTree_Dump(node, display_shortdict, 0);
-						if (n)
-						{
-							deref(n->key);
-							deref(n->data);
-							mfree(n);
-						}
-					}
-				}
-				break;
-
-
-			default:
-				fatalError(FATAL_INTERNAL, "Bad internal object type on free");
-				break;
-		}
-		h2o(h)->magic = 0;
-		mfree(h2o(h));
-	}
-}
-#endif
-
 /* --- Check object type ------------------------------------------------- */
 
 void CheckObjType(Object* o, int type)
 {
+	checkNull(o);
 	if (o->magic != OBJ_MAGIC)
 		fatalError(FATAL_OBJTYPE, "Attempt to manipulate invalid object");
 	if (o->type != type)
@@ -224,6 +107,17 @@ Object* CreateObjDict(void)
 	return o;
 }
 
+Object* CreateOInt(int i)
+{
+	Object* o = GCAllocObj();
+
+	o->magic = OBJ_MAGIC;
+	o->type = OBJ_INT;
+	o->size = i;
+
+	return o;
+}
+
 /* =======================================================================
 			 SPECIAL STRING OPERATIONS
    ======================================================================= */
@@ -250,19 +144,6 @@ Object* StringConcat(Object* o1, Object* o2)
 }
 
 /* --- Compare two strings ----------------------------------------------- */
-
-#if 0
-	register signed char __res;
-
-	while (1) {
-		__res = *cs - *ct;
-		ct++;
-		if (__res != 0 || !*cs++)
-			break;
-	}
-
-	return __res;
-#endif
 
 int StringCompare(Object* o1, Object* o2)
 {
@@ -314,8 +195,9 @@ int StringCompare(Object* o1, Object* o2)
 
 void ArrayResize(Object* o, int32 newsize)
 {
-	int factor;
+	int factor = 0;
 
+	checkNull(o);
 	if (o->magic != OBJ_MAGIC)
 		fatalError(FATAL_OBJTYPE, "Attempt to manipulate invalid object");
 
@@ -346,6 +228,58 @@ void ArrayResize(Object* o, int32 newsize)
 		o->ptr = mcalloc(newsize, factor);
 
 	o->size = newsize;
+}
+
+/* --- Insert elements into an array --------------------------------------- */
+
+void ArrayInsert(Object* o, int32 index, int32 size)
+{
+	int factor = 0;
+
+	checkNull(o);
+	if (o->magic != OBJ_MAGIC)
+		fatalError(FATAL_OBJTYPE, "Attempt to manipulate invalid object");
+	ArrayResize(o, o->size+size);
+
+	switch(o->type)
+	{
+		case OBJ_BYTEARRAY:	factor = 1;	break;
+		case OBJ_INTARRAY:	factor = 4;	break;
+		case OBJ_OBJARRAY:	factor = 4;	break;
+		default:
+			fatalError(FATAL_OBJTYPE, "Operation on object of invalid type");
+	}
+
+	memmove(((byte*)o->ptr)+(index+size)*factor,
+		((byte*)o->ptr)+index*factor,
+		(o->size-index-size)*factor);
+	memset(((byte*)o->ptr)+index*factor, 0,
+		size*factor);
+}
+
+/* --- Delete elements from an array --------------------------------------- */
+
+void ArrayDelete(Object* o, int32 index, int32 size)
+{
+	int factor = 0;
+
+	checkNull(o);
+	if (o->magic != OBJ_MAGIC)
+		fatalError(FATAL_OBJTYPE, "Attempt to manipulate invalid object");
+
+	switch(o->type)
+	{
+		case OBJ_BYTEARRAY:	factor = 1;	break;
+		case OBJ_INTARRAY:	factor = 4;	break;
+		case OBJ_OBJARRAY:	factor = 4;	break;
+		default:
+			fatalError(FATAL_OBJTYPE, "Operation on object of invalid type");
+	}
+
+	memmove(((byte*)o->ptr)+index*factor,
+		((byte*)o->ptr)+(index+size)*factor,
+		(o->size-index-size)*factor);
+	ArrayResize(o, o->size-size);
 }
 
 /* --- Set an entry in an array ------------------------------------------ */
@@ -466,21 +400,25 @@ void DictSetObj(Object* o, Object* key, Object* data)
 	CheckObjType(key, OBJ_STRING);
 	dict_set(o, key, d);
 }
+
 /* --- Retrieve an entry from a dictionary ------------------------------- */
 
 static OSN dict_get(Object* o, Object* key)
 {
 	DictNode* fn;
-	DictNode dn;
 
-	dn.key = key;
 	fn = AVLTree_Search(o->ptr,		/* Root node */
 			dict_comparefunc,	/* Comparison function */
 			&key,			/* Item to search for */
 			0);			/* Comparison mode */
 
 	if (!fn)
+	{
+		fprintf(stderr, "Entry '");
+		fwrite(key->ptr, 1, key->size, stderr);
+		fprintf(stderr, "' not in dictionary\n");
 		fatalError(FATAL_SYSCALL, "Entry not found in dictionary");
+	}
 
 	return fn->data;
 }
@@ -515,5 +453,15 @@ int DictStat(Object* o, Object* key)
 			dict_comparefunc,	/* Comparison function */
 			&key,			/* Item to search for */
 			0) != NULL);		/* Comparison mode */
+}
+
+/* =========================================================================
+                    SPECIAL ENCAPSULATED INTEGER OPERATIONS
+   ========================================================================= */
+
+int ExtractOInt(Object* o)
+{
+	CheckObjType(o, OBJ_INT);
+	return o->size;
 }
 

@@ -3,137 +3,6 @@
 
 library standard;
 
-// --- Prototypes ------------------------------------------------------------
-
-inline array string AppGetArguments
-{"sys AppGetArguments"}
-
-inline string AppGetErrorString
-{"sys AppGetErrorString"}
-
-inline void AppExit
-	int exitcode;
-{"sys AppExit"}
-
-inline void PrintString
-	int stream;
-	string message;
-{"sys PrintString"}
-
-inline void PrintInt
-	int stream;
-	int value;
-{"sys PrintInt"}
-
-inline void PrintNL
-	int stream;
-{"sys PrintNL"}
-
-inline int StreamOpenFile
-	string filename;
-	string flags;
-{"sys StreamOpenFile"}
-
-inline void StreamClose
-	int stream;
-{"sys StreamClose"}
-
-inline string StreamReadChar
-	int stream;
-{"sys StreamReadChar"}
-
-inline void StreamWriteByte
-	int stream;
-	int value;
-{"sys StreamWriteByte"}
-
-inline string StreamReadLine
-	int stream;
-{"sys StreamReadLine"}
-
-inline void StreamSeek
-	int stream;
-	int pos;
-{"sys StreamSeek"}
-
-inline int StreamEOF
-	int stream;
-{"sys StreamEOF"}
-
-inline int IsWhiteSpace
-	string s;
-{"sys IsWhiteSpace"}
-
-inline int IsDigit
-	string s;
-{"sys IsDigit"}
-
-inline int IsAlpha
-	string s;
-{"sys IsAlpha"}
-
-inline int IsAlphaNumeric
-	string s;
-{"sys IsAlphaNumeric"}
-
-inline int StringToInt
-	string s;
-{"pushi 10\n
-sys StringToIntRadix"}
-
-inline int StringToIntRadix
-	string s;
-	int radix;
-{"sys StringIntRadix"}
-
-inline string IntToString
-	int l;
-{"pushi 10\n
-sys IntToStringRadix"}
-
-inline string IntToStringRadix
-	int l;
-	int radix;
-{"sys IntToStringRadix"}
-
-inline string StringMid
-	string s;
-	int from;
-	int to;
-{"sys StringMid"}
-
-inline int StringInstr
-	string s;
-	string target;
-	int start;
-{"sys StringInstr"}
-
-inline int StringByte
-	string s;
-{"sys StringByte"}
-
-inline string ByteString
-	int c;
-{"sys ByteString"}
-
-inline string StringStrip
-	string s;
-{"sys StringStrip"}
-
-inline void DebugPrintDictArrayLong
-	dict array int d;
-{"sys DebugPrintObj"}
-
-inline void DebugPrintDictLong
-	dict int d;
-{"sys DebugPrintObj"}
-
-//endprotos
-
-global int stdin := 0;
-global int stdout := 1;
-global int stderr := 2;
-
 // ===========================================================================
 //                   GLOBAL VARIABLES & INITIALISATION CODE
 // ===========================================================================
@@ -168,7 +37,6 @@ global int TOKEN_NOT			:= 22;
 global int TOKEN_SHIFTLEFT		:= 23;
 global int TOKEN_SHIFTRIGHT		:= 24;
 global int TOKEN_WORD			:= 25;
-
 global int TOKEN_LIBRARY		:= 26;
 global int TOKEN_GLOBAL			:= 27;
 global int TOKEN_FUNCTION		:= 28;
@@ -177,7 +45,7 @@ global int TOKEN_INLINE			:= 30;
 global int TOKEN_END			:= 31;
 global int TOKEN_CONTAINS		:= 32;
 global int TOKEN_OR			:= 33;
-global int TOKEN_MOD			:= 34;
+global int TOKEN_REM			:= 34;
 global int TOKEN_AND			:= 35;
 global int TOKEN_SIZEOF			:= 36;
 global int TOKEN_CREATE			:= 37;
@@ -190,8 +58,11 @@ global int TOKEN_DO			:= 43;
 global int TOKEN_FOR			:= 44;
 global int TOKEN_DELETE			:= 45;
 global int TOKEN_ELSE			:= 46;
+global int TOKEN_STRUCTURE		:= 47;
+global int TOKEN_PERIOD			:= 48;
+global int TOKEN_INSERT			:= 49;
 
-global int TOKEN__MAX			:= 47;
+global int TOKEN__MAX			:= 50;
 
 global dict int string_to_token := init_string_to_token();
 global array string token_to_string := init_token_to_string();
@@ -204,6 +75,7 @@ global int token_pushed := -1;		// Next token (if any)
 
 global string line;			// Line being parsed
 global int linenum;			// Current line number
+global int debug;			// Emit debugging code?
 
 // --- Symbol tables ---------------------------------------------------------
 
@@ -224,12 +96,61 @@ global int linenum;			// Current line number
 // Unfortunately, we don't have structures yet. Instead I'm going to fake
 // it. This is a little unpleasant.
 
+// An element of a structure (used by Type)
+
+structure Element := {
+	int offset;			// Offset into array object
+	string type;			// Type of element
+};
+
+// A type
+
+structure Type := {
+	string initialiser;		// Default initialisation string
+	int collection;			// Is this a composite type?
+	string subtype;			// If so, this is what's in it
+	dict Element element;		// Unless it's a structure
+	int elements;			// which contains this many elements
+};
+
+// A variable
+
+structure Variable := {
+	string type;			// Type of the variable
+	int sp;				// Stack offset of variable
+};
+
+// An argument of a function (used by Function)
+
+structure FuncArg := {
+	string name;			// Name of argument
+	string type;			// Type of argument
+};
+
+// A function
+
+structure Func := {
+	string returntype;		// Return type of function
+	int arguments;			// Number of arguments
+	array FuncArg argument;		// List of arguments
+	int allocstate;			// Fully defined?
+};
+
 global int OTYPE_TYPE		:= 1;
 global int OTYPE_VAR		:= 2;
 global int OTYPE_FUNCTION	:= 3;
 global int OTYPE__MAX		:= 4;
-
 global array string otype_to_string := init_otype_to_string();
+
+structure Symbol := {
+	int otype;			// What sort of symbol
+	Type type;			// ...actual data (only one
+	Variable var;			// of these is used)
+	Func func;
+};
+
+global dict Symbol db;		// Not currently used
+global dict Symbol ldb;		// Not currently used
 
 global dict int db_otype;
 global dict string db_ntype;
@@ -261,6 +182,7 @@ global string functype;			// Type of current function
 global int pass;			// What pass we're on
 global int infile := stdin;		// Input file handle
 global int outfile := stdout;		// Ouput file handle
+global string infilename;		// Current input file name
 
 global array string emitqueue;		// Code emission queue
 global int queuecount := -1;		// Size of above
@@ -302,28 +224,30 @@ function array string init_token_to_string
 	a[TOKEN_SHIFTLEFT]		:= "<<";
 	a[TOKEN_SHIFTRIGHT]		:= ">>";
 	a[TOKEN_WORD]			:= "identifier";
-	
-	a[TOKEN_LIBRARY]		:= "'library'";
-	a[TOKEN_FUNCTION]		:= "'function'";
-	a[TOKEN_INLINE]			:= "'inline'";
-	a[TOKEN_PROTOTYPE]		:= "'prototype'";
-	a[TOKEN_END]			:= "'end'";
-	a[TOKEN_GLOBAL]			:= "'global'";
-	a[TOKEN_CONTAINS]		:= "'contains'";
-	a[TOKEN_OR]			:= "'or'";
-	a[TOKEN_MOD]			:= "'mod'";
-	a[TOKEN_AND]			:= "'and'";
-	a[TOKEN_SIZEOF]			:= "'sizeof'";
-	a[TOKEN_CREATE]			:= "'create'";
-	a[TOKEN_LIST]			:= "'list'";
-	a[TOKEN_RETURN]			:= "'return'";
-	a[TOKEN_IF]			:= "'if'";
-	a[TOKEN_WHILE]			:= "'while'";
-	a[TOKEN_BREAK]			:= "'break'";
-	a[TOKEN_DO]			:= "'do'";
-	a[TOKEN_FOR]			:= "'for'";
-	a[TOKEN_DELETE]			:= "'delete'";
-	a[TOKEN_ELSE]			:= "'else'";
+	a[TOKEN_LIBRARY]		:= "`library'";
+	a[TOKEN_FUNCTION]		:= "`function'";
+	a[TOKEN_INLINE]			:= "`inline'";
+	a[TOKEN_PROTOTYPE]		:= "`prototype'";
+	a[TOKEN_END]			:= "`end'";
+	a[TOKEN_GLOBAL]			:= "`global'";
+	a[TOKEN_CONTAINS]		:= "`contains'";
+	a[TOKEN_OR]			:= "`or'";
+	a[TOKEN_REM]			:= "`rem'";
+	a[TOKEN_AND]			:= "`and'";
+	a[TOKEN_SIZEOF]			:= "`sizeof'";
+	a[TOKEN_CREATE]			:= "`create'";
+	a[TOKEN_LIST]			:= "`list'";
+	a[TOKEN_RETURN]			:= "`return'";
+	a[TOKEN_IF]			:= "`if'";
+	a[TOKEN_WHILE]			:= "`while'";
+	a[TOKEN_BREAK]			:= "`break'";
+	a[TOKEN_DO]			:= "`do'";
+	a[TOKEN_FOR]			:= "`for'";
+	a[TOKEN_DELETE]			:= "`delete'";
+	a[TOKEN_ELSE]			:= "`else'";
+	a[TOKEN_STRUCTURE]		:= "`structure'";
+	a[TOKEN_PERIOD]			:= "period";
+	a[TOKEN_INSERT]			:= "`insert'";
 	
 	return a;
 }
@@ -340,7 +264,7 @@ function dict int init_string_to_token
 	d["global"]			:= TOKEN_GLOBAL;
 	d["contains"]			:= TOKEN_CONTAINS;
 	d["or"]				:= TOKEN_OR;
-	d["mod"]			:= TOKEN_MOD;
+	d["rem"]			:= TOKEN_REM;
 	d["and"]			:= TOKEN_AND;
 	d["sizeof"]			:= TOKEN_SIZEOF;
 	d["create"]			:= TOKEN_CREATE;
@@ -353,6 +277,8 @@ function dict int init_string_to_token
 	d["for"]			:= TOKEN_FOR;
 	d["delete"]			:= TOKEN_DELETE;
 	d["else"]			:= TOKEN_ELSE;
+	d["structure"]			:= TOKEN_STRUCTURE;
+	d["insert"]			:= TOKEN_INSERT;
 	
 	return d;
 }
@@ -382,6 +308,10 @@ function void init_type_database
 	db_ntype["int"]			:= "int";
 	db_collection["int"]		:= 0;
 	
+	db_otype[" oint"]		:= OTYPE_TYPE;
+	db_ntype[" oint"]		:= "object";
+	db_collection[" oint"]		:= 0;
+	
 	db_otype["string"]		:= OTYPE_TYPE;
 	db_ntype["string"]		:= "\"\"";
 	db_collection["string"]		:= 0;
@@ -403,6 +333,11 @@ function void init_type_database
 	db_ntype["array int"]		:= "array int";
 	db_collection["array int"]	:= 1;
 	db_contains["array int"]	:= "int";
+	
+	db_otype["array  oint"]		:= OTYPE_TYPE;
+	db_ntype["array  oint"]		:= "array object";
+	db_collection["array  oint"]	:= 1;
+	db_contains["array  oint"]	:= " oint";
 	
 	db_otype["array string"]	:= OTYPE_TYPE;
 	db_ntype["array string"]	:= "array object";
@@ -433,6 +368,8 @@ function void error
 	PrintString(stderr, s);
 	PrintString(stderr, " at line ");
 	PrintInt(stderr, linenum);
+	PrintString(stderr, " of ");
+	PrintString(stderr, infilename);
 	PrintNL(stderr);
 	AppExit(1);
 }
@@ -606,6 +543,8 @@ function string getchar
 		while (line == "")
 		{
 			linenum := linenum + 1;
+			if (pass == 2)
+				emitopi("line", linenum);
 			line := StreamReadLine(infile);
 			if (StreamEOF(infile))
 				error("Unexpected EOF!");
@@ -616,7 +555,6 @@ function string getchar
 				emit("\n");
 			}
 		}
-		line := " " + line;
 	}
 
 	c := line[0];
@@ -709,6 +647,8 @@ function int readtoken
 			return TOKEN_ADD;
 		else if (c == "-")
 			return TOKEN_SUBTRACT;
+		else if (c == ".")
+			return TOKEN_PERIOD;
 		else if (c == ":")
 		{
 			if (peekc() == "=")
@@ -769,6 +709,13 @@ function int readtoken
 			while (IsDigit(peekc()))
 				tokens := tokens + getchar();
 			tokeni := StringToInt(tokens);
+			return TOKEN_INTEGER;
+		} else if (c == "$")
+		{
+			tokens := "";
+			while (IsHexDigit(peekc()))
+				tokens := tokens + getchar();
+			tokeni := StringToIntRadix(tokens, 16);
 			return TOKEN_INTEGER;
 		} else if (iswordchar(c))
 		{
@@ -875,7 +822,7 @@ function string readtype
 	if (t == "")
 	{
 		if !(db_otype contains tokens)
-			error("Undefined symbol '"+tokens+"'");
+			error("Expected a type, got the undefined symbol '"+tokens+"' instead");
 	
 		if (db_otype[tokens] != OTYPE_TYPE)
 			error("Expected a type, got "+tokens);
@@ -964,7 +911,7 @@ function int scope
 	if (db_otype contains name)
 		return 2;
 		
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 // Look up fields in the scope database
@@ -977,7 +924,7 @@ function int lookup_otype
 	if (db_otype contains name)
 		return db_otype[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function string lookup_ntype
@@ -988,7 +935,7 @@ function string lookup_ntype
 	if (db_otype contains name)
 		return db_ntype[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function int lookup_collection
@@ -999,7 +946,7 @@ function int lookup_collection
 	if (db_otype contains name)
 		return db_collection[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function string lookup_contains
@@ -1010,7 +957,7 @@ function string lookup_contains
 	if (db_otype contains name)
 		return db_contains[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function array string lookup_args
@@ -1021,7 +968,7 @@ function array string lookup_args
 	if (db_otype contains name)
 		return db_args[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function dict string lookup_elements
@@ -1032,7 +979,7 @@ function dict string lookup_elements
 	if (db_otype contains name)
 		return db_elements[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
 }
 
 function int lookup_sp
@@ -1043,7 +990,38 @@ function int lookup_sp
 	if (db_otype contains name)
 		return db_sp[name];
 	
-	error("Undefined symbol '"+name+"'.");
+	error("Undefined symbol '"+name+"'");
+}
+
+// ============================================================================
+//                               TYPE CONVERSION
+// ============================================================================
+
+// Cast one type to another, or emits an error message.
+
+function string cast
+	string itype;
+	string icode;
+	string otype;
+{
+	if (itype == otype)
+		return icode;
+
+	queue();
+	if ((itype == "int") and (otype == " oint"))
+	{
+		emit(icode);
+		emitop("i2o");
+	}
+	else if ((itype == " oint") and (otype == "int"))
+	{
+		emit(icode);
+		emitop("o2i");
+	}
+	else
+		error("Attempt to cast "+itype+" to "+otype+" failed! Types are not compatible");
+		
+	return dequeue();
 }
 
 // ============================================================================
@@ -1060,12 +1038,17 @@ function void do_pass1
 	while(1) {
 		t := readtoken();
 		if (t == TOKEN_END)
-			return;
-		else if ((t == TOKEN_LIBRARY) or
-			 (t == TOKEN_GLOBAL))
+			break;
+		else if (t == TOKEN_LIBRARY)
+			do_library();
+		else if (t == TOKEN_GLOBAL)
+		{
 			while (readtoken() != TOKEN_EOS)
 			{
 			}
+		}
+		else if (t == TOKEN_STRUCTURE)
+			do_structure();
 		else if ((t == TOKEN_FUNCTION) or
 			 (t == TOKEN_PROTOTYPE) or
 			 (t == TOKEN_INLINE))
@@ -1086,15 +1069,16 @@ function void do_pass2
 	int t;
 	
 	pass := 2;
-	sp := 1;
 	while(1) {
 		t := readtoken();
 		if (t == TOKEN_END)
-			return;
+			break;
 		else if (t == TOKEN_LIBRARY)
 			do_library();
 		else if (t == TOKEN_GLOBAL)
 			do_global();
+		else if (t == TOKEN_STRUCTURE)
+			do_structure();
 		else if (t == TOKEN_FUNCTION)
 			do_function(0);
 		else if (t == TOKEN_PROTOTYPE)
@@ -1112,8 +1096,81 @@ function void do_pass2
 
 function void do_library
 {
+	int oldinfile := infile;
+	string oldinfilename := infilename;
+	int oldlinenum := linenum;
+	
 	ensuretoken(readtoken(), TOKEN_WORD);
 	ensureeos();
+
+	linenum := 1;
+	infilename := tokens+".ml";
+	infile := StreamOpenFile(infilename, "r");
+	if (infile == 0)
+	{
+		PrintString(stderr, "Error: couldn't open input file: ");
+		PrintString(stderr, AppGetErrorString());
+		PrintNL(stderr);
+		AppExit(1);
+	}
+	
+	if (pass == 1)
+		do_pass1();
+	else
+		do_pass2();
+		
+	infile := oldinfile;
+	infilename := oldinfilename;
+	linenum := oldlinenum;
+	line := "";
+}
+
+function void do_structure
+{
+	string name;
+	int elements := 0;
+	dict string d;
+	string type;
+	
+	ensuretoken(readtoken(), TOKEN_WORD);
+	name := tokens;
+	ensuretoken(readtoken(), TOKEN_BECOMES);
+	ensuretoken(readtoken(), TOKEN_OB);
+	
+	while (peek() != TOKEN_CB)
+	{
+		// Read in the elements of the structure. Because structures
+		// are implemented as arrays of objects, integers have to be
+		// encapsulated first. This is done by actually storing the
+		// element type as the system type " oint" and doing the
+		// appropriate casting later.
+	
+		type := readtype();
+		type := tokens;
+		if (type == "int")
+			type := " oint";
+		ensuretoken(readtoken(), TOKEN_WORD);
+		d[tokens] := ByteString(elements) + type;
+		elements := elements + 1;
+		ensureeos();
+	}
+	ensuretoken(readtoken(), TOKEN_CB);
+	ensureeos();
+
+	db_otype[name] := OTYPE_TYPE;
+	db_collection[name] := 3;
+	db_ntype[name] := "array object\ndupo\npushi "+IntToString(elements)+"\nresize";
+	db_elements[name] := d;
+
+	db_otype["array "+name]		:= OTYPE_TYPE;
+	db_ntype["array "+name]		:= "array object";
+	db_collection["array "+name]	:= 1;
+	db_contains["array "+name]	:= name;
+
+	db_otype["dict "+name]		:= OTYPE_TYPE;
+	db_ntype["dict "+name]		:= "dict object";
+	db_collection["dict "+name]	:= 1;
+	db_contains["dict "+name]	:= name;
 }
 
 function void do_function
@@ -1338,6 +1395,8 @@ function void do_funclevel
 	}
 	else if (t == TOKEN_DELETE)
 		do_delete();
+	else if (t == TOKEN_INSERT)
+		do_insert();
 	else if (t == TOKEN_OB)
 	{
 		while (peek() != TOKEN_CB)
@@ -1518,6 +1577,7 @@ function void do_assignment
 	string icode;
 	string itype;
 	string etype;
+	string ecode;
 	string nt;
 	int t := inscope(name);
 
@@ -1537,18 +1597,59 @@ function void do_assignment
 		emitopi("peek"+nt, lookup_sp(name));
 	pcode := dequeue();
 	itype := "void";
-	while (peek() == TOKEN_OS)
+	
+	// Assignments are of the form:
+	//
+	// foo[bar][baz].woo.woof := ...
+	//
+	// At this point, pcode/ptype contains the code and type of the first
+	// element (foo in this case). Next we iterate over the modifiers.
+	// At the end of each loop, icode/itype contains the index (structures
+	// are converted into object arrays). When we read a new modifier, we
+	// do a lookup and update pcode/ptype. So, when we run out of modifiers
+	// pcode/ptype is the object to write to and icode/itype is the index.
+	// If there is no index, i.e. a simple assignment, then itype is a
+	// void.
+	
+	while ((peek() == TOKEN_OS) or (peek() == TOKEN_PERIOD))
 	{
-		t := readtoken();
-		queue();
-		itype := do_rvalue();
-		icode := dequeue();
-		ensuretoken(readtoken(), TOKEN_CS);
-		if (peek() == TOKEN_OS)
+		if (itype != "void")
 		{
 			queue();
 			ptype := do_lookupnode(ptype, pcode, itype, icode);
 			pcode := dequeue();
+		}
+		t := readtoken();
+		if (t == TOKEN_OS)
+		{
+			queue();
+			itype := do_rvalue();
+			icode := dequeue();
+			ensuretoken(readtoken(), TOKEN_CS);
+		}
+		else
+		{
+			ensuretoken(readtoken(), TOKEN_WORD);
+			
+			if (db_collection[ptype] != 3)
+				error("Attempt to dereference an element of something that's not a structure");
+			if !(db_elements[ptype] contains tokens)
+				error("'"+tokens+"' is not an element of "+ptype);
+
+			ptype := db_elements[ptype][tokens];
+			queue();
+			emitopi("pushi", StringByte(ptype));
+			itype := "int";
+			ptype := StringMid(ptype, 1, -1);
+			if (!(db_otype contains ("array "+ptype)))
+			{
+				db_otype["array "+ptype] := OTYPE_TYPE;
+				db_ntype["array "+ptype] := "array object";
+				db_collection["array "+ptype] := 2;
+				db_contains["array "+ptype] := ptype;
+			}
+			ptype := "array "+ptype;
+			icode := dequeue();
 		}
 	}
 
@@ -1573,9 +1674,8 @@ function void do_assignment
 	{
 		queue();
 		etype := do_rvalue();
-		if (etype != lookup_contains(ptype))
-			error("You can't assign a "+etype+" value to a "+ptype+" variable");
-		do_storenode(ptype, pcode, itype, icode, dequeue());
+		ecode := cast(etype, dequeue(), db_contains[ptype]);
+		do_storenode(ptype, pcode, itype, icode, ecode);
 	}
 }
 
@@ -1639,7 +1739,7 @@ function string do_rvalue_highpriority
 	op := peek();
 	if ((op == TOKEN_MULTIPLY) or
 	    (op == TOKEN_DIVIDE) or
-	    (op == TOKEN_MOD) or
+	    (op == TOKEN_REM) or
 	    (op == TOKEN_AND))
 		return do_highpriority(readtoken(), t1, s);
 	else
@@ -1934,8 +2034,8 @@ function string do_highpriority
 		emitop("mul");
 	else if (token == TOKEN_DIVIDE)
 		emitop("div");
-	else if (token == TOKEN_MOD)
-		emitop("mod");
+	else if (token == TOKEN_REM)
+		emitop("rem");
 	else if (token == TOKEN_AND)
 		emitop("and");
 	c := dequeue();
@@ -2019,6 +2119,7 @@ function string do_varlookup
 	string itype;
 	string icode;
 	string nt;
+	int t;
 
 	if (inscope(name) != OTYPE_VAR)
 		error("'"+name+"' is a "
@@ -2037,17 +2138,55 @@ function string do_varlookup
 	else
 		emitopi("peek"+nt, lookup_sp(name));
 	pcode := dequeue();
-		
-	while (peek() == TOKEN_OS)
+	
+	// Here we're iterating over any possible modifiers to the base
+	// variable. Structures are treated as a slightly munged array.
+	
+	while ((peek() == TOKEN_OS) or (peek() == TOKEN_PERIOD))
 	{
-		ensuretoken(readtoken(), TOKEN_OS);
-		queue();
-		itype := do_rvalue();
-		icode := dequeue();
-		ensuretoken(readtoken(), TOKEN_CS);
-		queue();
-		ptype := do_lookupnode(ptype, pcode, itype, icode);
-		pcode := dequeue();
+		t := readtoken();
+		if (t == TOKEN_OS)
+		{
+			queue();
+			itype := do_rvalue();
+			icode := dequeue();
+			ensuretoken(readtoken(), TOKEN_CS);
+
+			queue();
+			ptype := do_lookupnode(ptype, pcode, itype, icode);
+			pcode := dequeue();
+		}
+		else
+		{
+			ensuretoken(readtoken(), TOKEN_WORD);
+			
+			if (db_collection[ptype] != 3)
+				error("Attempt to dereference an element of something that's not a structure");
+			if !(db_elements[ptype] contains tokens)
+				error("'"+tokens+"' is not an element of "+ptype);
+
+			ptype := db_elements[ptype][tokens];
+			queue();
+			emitopi("pushi", StringByte(ptype));
+			icode := dequeue();
+			itype := "int";
+			ptype := StringMid(ptype, 1, -1);
+			if (!(db_otype contains ("array "+ptype)))
+			{
+				db_otype["array "+ptype] := OTYPE_TYPE;
+				db_ntype["array "+ptype] := "array object";
+				db_collection["array "+ptype] := 2;
+				db_contains["array "+ptype] := ptype;
+			}
+			ptype := "array "+ptype;
+
+			queue();
+			itype := do_lookupnode(ptype, pcode, itype, icode);
+			ptype := db_contains[ptype];
+			if (ptype == " oint")
+				ptype := "int";
+			pcode := cast(itype, dequeue(), ptype);
+		}
 	}
 	emit(pcode);
 	return ptype;
@@ -2265,19 +2404,82 @@ function void do_setsize
 
 function void do_delete
 {
-	error("delete unimplemented");
+	string t;
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := do_rvalue();
+	if (StringMid(t, 0, 5) != "array")
+		error("Can't use delete() on something that's not an array");
+	ensuretoken(readtoken(), TOKEN_COMMA);
+	if (do_rvalue() != "int")
+		error("Index parameter for delete() must be an int");
+	ensuretoken(readtoken(), TOKEN_COMMA);
+	if (do_rvalue() != "int")
+		error("Size parameter for delete() must be an int");
+	ensuretoken(readtoken(), TOKEN_CP);
+	emitop("delete_array");
+	ensureeos();
+}
+
+function void do_insert
+{
+	string t;
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := do_rvalue();
+	if (StringMid(t, 0, 5) != "array")
+		error("Can't use insert() on something that's not an array");
+	ensuretoken(readtoken(), TOKEN_COMMA);
+	if (do_rvalue() != "int")
+		error("Index parameter for insert() must be an int");
+	ensuretoken(readtoken(), TOKEN_COMMA);
+	if (do_rvalue() != "int")
+		error("Size parameter for insert() must be an int");
+	ensuretoken(readtoken(), TOKEN_CP);
+	emitop("insert_array");
+	ensureeos();
 }
 
 // ============================================================================
 //                                 MAIN PROGRAM
 // ============================================================================
 
-function void main
+function void process_command_line
 {
 	array string args := AppGetArguments();
-	init_type_database();
+	string filename;
+
+	if (sizeof(args) < 3)
+	{
+		PrintString(stderr, "Syntax: mic <input filename> <output filename>\n");
+		AppExit(1);
+	}
 	
-	infile := StreamOpenFile(args[1], "r");
+	infilename := args[1];
+	infile := StreamOpenFile(infilename, "r");
+	
+	if (infile == 0)
+	{
+		PrintString(stderr, "Error: couldn't open input file: ");
+		PrintString(stderr, AppGetErrorString());
+		PrintNL(stderr);
+		AppExit(1);
+	}
+	
+	filename := args[2];
+	outfile := StreamOpenFile(filename, "w");
+	
+	if (outfile == 0)
+	{
+		PrintString(stderr, "Error: couldn't open output file: ");
+		PrintString(stderr, AppGetErrorString());
+		PrintNL(stderr);
+		AppExit(1);
+	}
+}
+
+function void main
+{
+	process_command_line();
+	init_type_database();
 	
 	PrintString(stderr, "Pass 1\n");
 	linenum := 0;
@@ -2286,6 +2488,7 @@ function void main
 	line := "";
 	linenum := 0;
 	PrintString(stderr, "Pass 2\n");
+	sp := 1;
 	do_pass2();
 	emitop("pushfp");
 	emitops("call", "main");
@@ -2320,6 +2523,7 @@ name, pcode, ptype, icode, type)
 		if (peek() == token_os)
 		{
 			queue()
+			PrintString(stderr, "(3) ptype=<"+ptype+">\n");
 			ptype = do_lookupnode(ptype, pcode, itype, icode)
 			pcode = dequeue()
 		}
@@ -2330,5 +2534,5 @@ name, pcode, ptype, icode, type)
 	else
 		error("Can't delete elements yet")
 	
-	ensureeos()
+	ensureeos();
 }
