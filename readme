@@ -1,0 +1,95 @@
+                                 MERCAT V0.2.1
+                                 =============
+				  
+				 Alpha release
+                            (C) 1997-8 David Given
+			           9/9/1998
+
+INTRODUCTION
+============
+
+This is an alpha release of my Mercat virtual machine and compiler.
+
+The Mercat system comprises a compiler, assembler and a run-time system. The
+run-time system is written in C; the rest of it is, of course, written in
+Mercat. All languages that are worth their weight in HD floppies are
+self-hosting. 
+
+QUICK START GUIDE
+=================
+
+You will need a run-time system. You can download the source (the
+posix*.zip package) or a binary (linux*.zip, dos32*.zip, dos16*.zip). The
+end result is a program called `mi' (or `mi.exe').
+
+Now, do this:
+
+	mi paranoia.mo
+	
+And you will get my one and only demonstration program. (This is a
+quick-n-dirty port from the BSD games package. If you look at the sources,
+you'll see it's not very complicated. Never mind --- it's fun the first
+couple of dozen times.)
+
+Files ending in .mo are Mercat object files. Mercat HLL source files use the
+.mi extension. Mercat-P files, that is, assembly files, use .mp.
+
+To compile a source file do this:
+
+	mi mic.mo foobar.mi > foobar.mp
+	mi masm.mo foobar.mp foobar.mo
+	
+If you're using DOS or Linux there are some scripts that will help:
+
+	com foobar.mi foobar.mp (DOS only)
+	mic foobar.mi > foobar.mp (Linux only)
+	masm foobar.mp foobar.mo
+
+Currently, the only documentation is the source.
+
+DANGER, WILL ROBINSON!
+======================
+
+This is an alpha release. It's not complete, it's not bug-free. The compiler
+has no optimisation. The assembler is antioptimised; it always uses the longest
+form of the instructions because there's a bug in it (and it needs a rewrite
+anyway).
+
+In particular: the "delete" keyword in the compiler doesn't work (it deletes an
+entry from a dictionary). Adding support would be reasonably easy; the back-end
+code's there, it just needs adding the appropriate opcode and adding support in
+the compiler.
+
+Also, the compiler doesn't do structures. This makes parts of the compiler and
+assembler a bit gothic in places. Structures are the next big thing planned.
+
+There's one other strange thing: rather embarassingly, my original awk
+cross-compiler (supplied; com.awk) is a bit faster than the Mercat version.
+Eeek! I've got a feeling this is because I have a very inefficient parser
+(lots of string concatenation). If anyone feels the sudden urge to improve
+things, I would only too happy.
+
+DOCUMENTATION
+=============
+
+You're reading it.
+
+FEEDBACK
+========
+
+Comments should go to dg@tao.co.uk.
+Food, money, mailbombs etc go to 31 Sturbridge Close, Lower Earley, Reading
+RG6 4EE. (Actually, don't send me that last. This is a rented house.)
+
+LICENSE
+=======
+
+The little grey men with briefcases made me put this bit in. Anyway. It's mine,
+all mine[*], you can use it for non-commercial purposes but can't
+redistribute it without my permission. If you wish to make changes send them
+back to me and I'll integrate them into the rest of the system.
+
+[*] Except for the Paranoia game. This is my port of Tim Lister's
+implementation. He, in turn, took the text from an article by Sam Shirley. See
+the top of paranoia.mi for more information.
+

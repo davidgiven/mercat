@@ -1,0 +1,25 @@
+CHANGE LOG
+==========
+
+September 9 1998
+----------------
+
+Major bugfixes; a lot of that-shouldn't-be-working ones, particularly in the
+AVL tree manager.
+ASSERT() macro and lots of debugging code.
+Tested under Linux. *Really* works this time.
+
+September 3 1998
+----------------
+
+Ditched rhide's bogus makefile, and wrote one of my own.
+Created config.h (for portability).
+Added my own (untested) implementation of atoi for those platforms that
+don't have it (such as Linux. Bizarre!).
+Tested under Linux. Works.
+
+August 22 1998
+--------------
+
+Initial release.
+

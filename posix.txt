@@ -1,0 +1,59 @@
+                         MERCAT POSIX RUN-TIME V0.2.1
+                         ============================
+				  
+				 Alpha release
+                            (C) 1997-8 David Given
+			           9/9/1998
+
+INTRODUCTION
+============
+
+This is an alpha release of my Mercat virtual machine.
+
+The Mercat system comprises a compiler, assembler and a run-time system. The
+run-time system is written in C; the rest of it is, of course, written in
+Mercat. All languages that are worth their weight in HD floppies are
+self-hosting. 
+
+This file describes the source release of the Posix version of the
+run-time system. If you want the compiler and assembler, or precompiled
+versions of the run-time, then see the web page at:
+
+	http://wiredsoc.ml.org/~dg/cgi-bin/getpage.cgi?Mercat
+
+QUICK START GUIDE
+=================
+
+1. Edit config.h. It is self-documenting.
+2. Edit Makefile. You probably won't need to change anything if you use
+gcc.
+3. make
+
+This will build an executable called `mi' (or `mi.exe' under DOS). See the
+core readme file for information on how to use it.
+
+DOS SPECIFICS
+=============
+
+DOS, being DOS, is awkward. If you're using DJGPP then things should be
+pretty straightforward. If you're using Borland for a 16-bit build...
+well, I haven't tried that yet.
+
+FEEDBACK
+========
+
+Comments should go to dg@tao.co.uk.
+Food, money, mailbombs etc go to 31 Sturbridge Close, Lower Earley, Reading
+RG6 4EE. (Actually, don't send me that last. This is a rented house.)
+
+LICENSE
+=======
+
+The little grey men with briefcases made me put this bit in. Anyway. It's mine,
+all mine[*], you can use it for non-commercial purposes but can't
+redistribute it without my permission. If you wish to make changes send them
+back to me and I'll integrate them into the rest of the system.
+
+[*] Except for the Paranoia game. This is my port of Tim Lister's
+implementation. He, in turn, took the text from an article by Sam Shirley. See
+the top of paranoia.mi for more information.

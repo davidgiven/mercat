@@ -1,0 +1,69 @@
+/* opcodes.h
+ * Micron-P opcodes
+ */
+
+#ifndef OPCODES_H
+#define OPCODES_H
+
+enum {
+	OP_PUSHI = 0,
+	OP_ADD,
+	OP_SUB,
+	OP_MUL,
+	OP_DIV,
+	OP_REM,
+	OP_AND,
+	OP_OR,
+	OP_XOR,
+	OP_SHL,
+	OP_SHR,
+	OP_BEQ,
+	OP_BNE,
+	OP_BLT,
+	OP_BLE,
+	OP_BGT,
+	OP_BGE,
+	OP_JUMP,
+	OP_CALL,
+	OP_SYS,
+	OP_GETA,
+	OP_SETA,
+	OP_PEEKI,
+	OP_POKEI,
+	OP_PEEKO,
+	OP_POKEO,
+	OP_LINE,
+
+	OP_PUSHI1 = 200,	/* 200 */
+	OP_PUSHI_1,
+	OP_PUSHO,
+	OP_NOT = OP_PUSHO+3,	/* 205 */
+	OP_ITB,
+	OP_RETURN,
+	OP_CONCAT,
+	OP_POPI,
+	OP_POPO,		/* 210 */
+	OP_HALT,
+	OP_SAVEI,
+	OP_SAVEO,
+	OP_LOADI,
+	OP_LOADO,		/* 215 */
+	OP_PUSHFP,
+	OP_STRCMP,
+	OP_RESIZE,
+	OP_PUSHNIL,
+	OP_PUSHABYTE,		/* 220 */
+	OP_PUSHAINT,
+	OP_PUSHAOBJ,
+	OP_SIZE,
+	OP_NEG,
+	OP_PUSHDBYTE,		/* 225 */
+	OP_PUSHDINT,
+	OP_PUSHDOBJ,
+	OP_GETD,
+	OP_SETD,
+	OP_STATD,		/* 230 */
+	OP_ISNIL
+};
+
+#endif

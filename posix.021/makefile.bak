@@ -1,0 +1,41 @@
+# Mercat V0.2 (Posix)
+# (C) 1997-8 David Given
+
+# Remember to change config.h!
+
+VERSION = \"Mercat V0.2.1 runtime (Posix)\"
+CFLAGS = -O2 -Wall
+EXE = mi
+
+OBJS =	alloc.o			\
+	avltree.o		\
+	disasm.o		\
+	interp.o		\
+	main.o			\
+	misc.o			\
+	object.o		\
+	stack.o			\
+	string.o		\
+	syscall/app.o		\
+	syscall/convert.o	\
+	syscall/debug.o		\
+	syscall/number.o	\
+	syscall/streamio.o	\
+	syscall/stringop.o	\
+	syscalls.o
+
+LIBS = -lm
+
+all: $(EXE)
+
+$(EXE): $(OBJS)
+	$(CC) -o $(EXE) $(OBJS) $(LIBS)
+
+clean:
+	$(RM) $(OBJS) $(EXE)
+	
+%.o: %.c
+	$(CC) -c -o $@ $(CFLAGS) -I. -DMERCAT_VERSION="$(VERSION)" $<
+	
+misc.c: inline.h
+

@@ -1,0 +1,838 @@
+// Micron-P assembler
+// This uses the early subset of Micron that gets translated into another
+// language for compilation.
+// (C) 1998 David Given
+
+library standard;
+
+// --- Prototypes ------------------------------------------------------------
+
+inline array string AppGetArguments
+{"sys AppGetArguments"}
+
+inline string AppGetErrorString
+{"sys AppGetErrorString"}
+
+inline void AppExit
+	int exitcode;
+{"sys AppExit"}
+
+inline void PrintString
+	int stream;
+	string message;
+{"sys PrintString"}
+
+inline void PrintInt
+	int stream;
+	int value;
+{"sys PrintInt"}
+
+inline void PrintNL
+	int stream;
+{"sys PrintNL"}
+
+inline int StreamOpenFile
+	string filename;
+	string flags;
+{"sys StreamOpenFile"}
+
+inline void StreamClose
+	int stream;
+{"sys StreamClose"}
+
+inline string StreamReadChar
+	int stream;
+{"sys StreamReadChar"}
+
+inline void StreamWriteByte
+	int stream;
+	int value;
+{"sys StreamWriteByte"}
+
+inline string StreamReadLine
+	int stream;
+{"sys StreamReadLine"}
+
+inline void StreamSeek
+	int stream;
+	int pos;
+{"sys StreamSeek"}
+
+inline int IsWhiteSpace
+	string s;
+{"sys IsWhiteSpace"}
+
+inline int IsDigit
+	string s;
+{"sys IsDigit"}
+
+inline int IsAlpha
+	string s;
+{"sys IsAlpha"}
+
+inline int IsAlphaNumeric
+	string s;
+{"sys IsAlphaNumeric"}
+
+inline int StringToInt
+	string s;
+{"pushi 10\n
+sys StringToIntRadix"}
+
+inline int StringToIntRadix
+	string s;
+	int radix;
+{"sys StringToIntRadix"}
+
+inline string IntToString
+	int l;
+{"pushi 10\n
+sys IntToStringRadix"}
+
+inline string IntToStringRadix
+	int l;
+	int radix;
+{"sys IntToStringRadix"}
+
+inline string StringMid
+	string s;
+	int from;
+	int to;
+{"sys StringMid"}
+
+inline int StringInstr
+	string s;
+	string target;
+	int start;
+{"sys StringInstr"}
+
+inline int StringByte
+	string s;
+{"sys StringByte"}
+
+inline string ByteString
+	int c;
+{"sys ByteString"}
+
+inline string StringStrip
+	string s;
+{"sys StringStrip"}
+
+inline void DebugPrintDictArrayInt
+	dict array int d;
+{"sys DebugPrintObj"}
+
+inline void DebugPrintDictInt
+	dict int d;
+{"sys DebugPrintObj"}
+
+endprotos
+
+global int stdin := 0;
+global int stdout := 1;
+global int stderr := 2;
+
+// --- Global variables ------------------------------------------------------
+
+global int infile := 0;
+global int outfile := 0;
+
+// Op structure
+
+global int OP_VALUE := 0;
+global int OP_AMODE := 1;
+global int OP__SIZE := 2;
+
+global dict array int op;
+
+// Addressing modes
+
+global int A_COMPLEX	:= 0;
+global int A_SIMPLE	:= 1;
+global int A_PUSHO	:= 2;
+global int A_SYS	:= 3;
+global int A_OFFSET	:= 4;
+global int A_PUSHI	:= 5;
+
+global int A_CONSTANT	:= 10;
+global int A_END	:= 11;
+global int A_COMMENT	:= 12;
+
+// State
+
+global int pass	:= 0;	// The current pass number
+global int errors	:= 0;	// Set to report errors
+global int codegen	:= 1;	// Set to generate code
+global int changeflag	:= 2;	// Set if a symbol has changed
+
+global int linenum	:= 0;	// Current line number
+global int pc		:= 1;	// Current program counter
+
+global dict int syscalls;	// System calls used
+global int nsyscalls;		// How many system calls used
+global dict int constants;	// Defined constants & labels
+
+// ===========================================================================
+//              GENERAL-PURPOSE UTILITIES & SYSTEM FUNCTIONS
+// ===========================================================================
+
+// --- Process command line arguments ----------------------------------------
+
+function void ProcessCommandLine
+{
+	array string args := AppGetArguments();
+	string filename;
+
+	if (sizeof(args) < 3)
+	{
+		PrintString(stderr, "Syntax: masm <input filename> <output filename>\n");
+		AppExit(1);
+	}
+	
+	filename := args[1];
+//	filename := "..\\mic.mp";
+	infile := StreamOpenFile(filename, "r");
+	
+	if (infile == 0)
+	{
+		PrintString(stderr, "Error: couldn't open input file: ");
+		PrintString(stderr, AppGetErrorString());
+		PrintNL(stderr);
+		AppExit(1);
+	}
+	
+	filename := args[2];
+//	filename := "..\\mic.mo";
+	outfile := StreamOpenFile(filename, "w");
+	
+	if (outfile == 0)
+	{
+		PrintString(stderr, "Error: couldn't open output file: ");
+		PrintString(stderr, AppGetErrorString());
+		PrintNL(stderr);
+		AppExit(1);
+	}
+}
+
+// --- Report an error -------------------------------------------------------
+
+function void error
+	string msg;
+{
+	PrintString(stderr, "Error: ");
+	PrintString(stderr, msg);
+	PrintNL(stderr);
+	AppExit(1);
+}
+
+// --- Process escape sequences ---------------------------------------------
+
+function string escape
+	string argument;
+{
+	string s := "";
+	int i := 0;
+	int n := sizeof(argument);
+	string c;
+	
+	while (i < n)
+	{
+		c := argument[i];
+		if (c == "\\")
+		{
+			i := i + 1;
+			if (i == n)
+				error("Unexpected EOS processing escape sequence");
+			c := argument[i];
+			if (c == "n")
+				s := s + ByteString(10);
+			else if (c == "t")
+				s := s + ByteString(9);
+			else if (c == "\\")
+				s := s + ByteString(92);
+			else if (c == "\"")
+				s := s + ByteString(34);
+			else
+				s := s + c;
+		}
+		else
+			s := s + c;
+		i := i + 1;
+	}
+	
+	return s;
+}
+
+// ===========================================================================
+//                            DATA INITIALISATION
+// ===========================================================================
+
+// Create a single OP structure.
+
+function array int CreateOp
+	int value;
+	int amode;
+{
+	array int a;
+	
+	sizeof(a) := OP__SIZE;
+	a[OP_VALUE] := value;
+	a[OP_AMODE] := amode << 8;
+	
+	return a;
+}
+
+// Initialise the opcode table.
+
+function void LoadOps
+{
+	int p := 0;
+	
+	op["pushi"]		:= CreateOp(p, A_PUSHI);	 p := p + 4;
+	op["add"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["sub"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["mul"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["div"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["rem"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["and"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["or"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["xor"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["shl"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["shr"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["beq"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["bne"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["blt"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["ble"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["bgt"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["bge"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["jump"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["call"]		:= CreateOp(p, A_OFFSET);	 p := p + 4;
+	op["sys"]		:= CreateOp(p, A_SYS);		 p := p + 4;
+	op["geta"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["seta"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["peeki"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["pokei"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["peeko"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["pokeo"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	op["line"]		:= CreateOp(p, A_COMPLEX);	 p := p + 4;
+	
+	p := 200;
+	op["pushi1"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["pushi-1"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["pusho"]		:= CreateOp(p, A_PUSHO);	 p := p + 3;
+	op["not"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["itb"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["return"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["concat"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["popi"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["popo"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["halt"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["savei"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["saveo"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["loadi"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["loado"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["pushfp"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["strcmp"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["resize"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_nil"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_abyte"]	:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_aint"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_aobj"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["size"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["neg"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_dbyte"]	:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_dint"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["push_dobj"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["getd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["setd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+	op["statd"]		:= CreateOp(p, A_SIMPLE);	 p := p + 1;
+
+	op["#"]			:= CreateOp(-1, A_COMMENT);
+	op[":"]			:= CreateOp(-1, A_CONSTANT);
+	op["end"]		:= CreateOp(-1, A_END);
+}
+
+// ===========================================================================
+//                              CODE EMISSION
+// ===========================================================================
+
+// Output a byte
+
+function void emit
+	int b;
+{
+	if (codegen)
+		StreamWriteByte(outfile, b);
+//	{
+//		PrintShort(stderr, pc);
+//		PrintString(stderr, " = ");
+//		PrintShort(stderr, b);
+//		PrintNL(stderr);
+//	}
+	pc := pc + 1;
+}
+
+// Output a short
+
+function void emit_short
+	int v;
+{
+	emit(v and 255);
+	emit(v >> 8);
+}
+
+// Output a long
+
+function void emit_long
+	int v;
+{
+	emit_short(v and 65535);
+	emit_short(v >> 16);
+}
+
+// Emit a string, not terminated
+
+function void emit_string
+	string s;
+{
+	int n := sizeof(s);
+	int i;
+	
+	for(i:=0; i<n; i:=i+1)
+		emit(StringByte(s[i]));
+}
+
+// Emit the file header
+
+function void EmitHeader
+	int progsize;
+{
+	array string a := list(syscalls);
+	int n := sizeof(a);
+	int i;
+
+	// Magic number
+	
+	emit_string(".mp ");
+	
+	// File version
+	
+	emit(0);
+	emit(3);
+	
+	// Number of entries in header table
+	
+	emit_short(n);
+		
+//	PrintString(stderr, "System calls used:\n");
+	for (i:=0; i<n; i:=i+1)
+	{
+//		PrintString(stderr, "\t");
+//		PrintShort(stderr, syscalls[a[i]]);
+//		PrintString(stderr, "\t");
+//		PrintString(stderr, a[i]);
+//		PrintNL(stderr);
+		
+		emit_short(syscalls[a[i]]);
+		emit_string(a[i]);
+		emit(0);
+	}
+	
+	// Size of code
+	
+	emit_long(progsize);
+}
+
+// ===========================================================================
+//                           ACTUAL ASSEMBLER BIT
+// ===========================================================================
+
+// Decodes a value.
+
+function int getvalue
+	string s;
+{
+	if (constants contains s)
+		return constants[s];
+	if (IsDigit(s[0]) or (s[0] == "-"))
+		return StringToInt(s);
+	
+	if (pass>1)
+		error("Undefined symbol `"+s+"'");
+}
+
+// Does a single pass.
+
+function void process
+{
+	string line;
+	string opcode;
+	string argument;
+	int i;
+	
+	pass := pass + 1;
+	PrintString(stderr, "Pass ");
+	PrintInt(stderr, pass);
+	PrintNL(stderr);
+
+	StreamSeek(infile, 0);
+	linenum := 1;
+	pc := 0;
+	nsyscalls := 0;
+		
+	do {
+		line := StringStrip(StreamReadLine(infile));
+		
+		i := StringInstr(line, " ", 0);
+		if (i == -1)
+		{
+			opcode := line;
+			argument := "";
+		}
+		else
+		{
+			opcode := StringMid(line, 0, i);
+			argument := StringMid(line, i+1, -1);
+		}
+		argument := StringStrip(argument);
+		
+		if (opcode == "")
+			opcode := "#";
+			
+		if !(op contains opcode)
+		{
+//			DebugPrintDictArrayInt(op);
+			error("Unknown opcode `" + opcode + "'");
+		}
+		
+		i := op[opcode][OP_AMODE] >> 8;
+
+//		PrintInt(stderr, i);
+//		PrintString(stderr, ": ");
+//		PrintString(stderr, opcode);
+//		PrintNL(stderr);
+				
+		if (i == A_COMMENT)
+		{
+		}
+		else if (i == A_END)
+			break;
+		else if (i == A_SIMPLE)
+			op_simple(opcode);
+		else if (i == A_COMPLEX)
+			op_complex(opcode, argument);
+		else if (i == A_SYS)
+			op_sys(opcode, argument);
+		else if (i == A_CONSTANT)
+			op_constant(argument);
+		else if (i == A_PUSHI)
+			op_pushi(argument);
+		else if (i == A_OFFSET)
+			op_offset(opcode, argument);
+		else if (i == A_PUSHO)
+			op_pusho(argument);
+		else
+			error("Unimplemented opcode");
+	} while (1);
+}
+
+// Simple (no parameter) opcodes
+
+function void op_simple
+	string opcode;
+{
+	emit(op[opcode][OP_VALUE]);
+}
+
+// Complex opcodes
+
+function void op_complex
+	string opcode;
+	string argument;
+{
+	int l;
+	array int a := op[opcode];
+	int value := a[OP_VALUE];
+	int amode := a[OP_AMODE] and 255;
+
+//	PrintString(stderr, opcode);
+//	PrintNL(stderr);
+	
+	if (argument == "")
+	{
+		emit(value);
+		return;
+	}
+
+	l := getvalue(argument);
+	
+//	if ((l > -128) and (l < 127))
+//	{
+//		if (amode and 2)
+//		{
+//			emit(value+1);
+//			emit(l);
+//		}
+//		else
+//			error("`" + opcode + "' can't do byte-constant");
+//		return;
+//	}
+//	else if ((l > -32768) and (l < 32767))
+//	{
+//		if (amode and 4)
+//		{
+//			emit(value+2);
+//			emit_short(l);
+//		}
+//		else
+//			error("`" + opcode + "' can't do short-constant");
+//		return;
+//	}
+//	else
+//	{
+//		if (amode and 8)
+//		{
+			emit(value+3);
+			emit_long(l);
+//		}
+//		else
+//			error("`" + opcode + "' can't do long-constant");
+//		return;
+//	}
+//	error("Internal error in A_COMPLEX instruction!");
+}
+
+// System call
+
+function void op_sys
+	string opcode;
+	string argument;
+{
+	array int a := op[opcode];
+	int value := a[OP_VALUE];
+	int amode := a[OP_AMODE] and 255;
+	int l;
+	
+	if (argument == "")
+	{
+		emit(value);
+		return;
+	}
+
+	if (pass == 1)
+	{
+//		PrintString(stderr, "Adding "+argument+" (");
+//		PrintInt(stderr, nsyscalls);
+//		PrintString(stderr, ")");
+//		PrintNL(stderr);
+		if !(syscalls contains argument)
+		{
+			syscalls[argument] := nsyscalls;
+			nsyscalls := nsyscalls + 1;
+		}
+	}
+	
+//	PrintString(stderr, "Looking for "+argument);
+//	PrintNL(stderr);
+//	DebugPrintDictInt(syscalls);
+	l := syscalls[argument];
+	op_complex(opcode, IntToString(l));
+	
+//	if ((l > -128) and (l < 127))
+//	{
+//		if (amode and 2)
+//		{
+//			emit(value+1);
+//			emit(l);
+//		}
+//		else
+//			error("`" + opcode + "' can't do byte-constant");
+//		return;
+//	}
+//	else
+//	{
+//		if (amode and 4)
+//		{
+//			emit(value+2);
+//			emit_short(l);
+//		}
+//		else
+//			error("`" + opcode + "' can't do short-constant");
+//		return;
+//	}
+//	error("Internal error in A_SYS instruction!");
+}
+
+// Defined constant
+
+function void op_constant
+	string argument;
+{
+	string name;
+	int value;
+	int i;
+	
+	i := StringInstr(argument, " ", 0);
+	if (i == -1)
+	{
+		name := argument;
+		value := pc;
+	}
+	else
+	{
+		name := StringMid(argument, 0, i);
+		value := getvalue(StringMid(argument, i+1, -1));
+	}
+	
+	if (constants contains name)
+		if (constants[name] != value)
+		{
+			changeflag := 1;
+//			PrintString(stderr, "CHANGED ");
+		}
+
+//	PrintString(stderr, "Constant ");
+//	PrintString(stderr, name);
+//	PrintString(stderr, " = ");
+//	PrintInt(stderr, value);
+//	PrintNL(stderr);
+
+	constants[name] := value;
+}
+
+// Push int
+
+function void op_pushi
+	string argument;
+{
+	if (argument == "1")
+	{
+		op_simple("pushi1");
+		return;
+	}
+	else if (argument == "-1")
+	{
+		op_simple("pushi-1");
+		return;
+	}
+	else if (argument == "0")
+	{
+		emit(op["pushi"][OP_VALUE]);
+		return;
+	}
+	op_complex("pushi", argument);
+}
+
+// Push an offset to a label
+
+function void op_offset
+	string opcode;
+	string argument;
+{
+	string dest := IntToString(getvalue(argument) - pc);
+//	PrintString(stderr, "Offset from ");
+//	PrintInt(stderr, pc);
+//	PrintString(stderr, " to ");
+//	PrintString(stderr, argument);
+//	PrintString(stderr, " = ");
+//	PrintString(stderr, dest);
+//	PrintNL(stderr);
+	op_complex(opcode, dest);
+}
+
+// Push a string
+
+function void op_pusho
+	string argument;
+{
+	int size := 0;
+	if (argument == "\"\"")
+		argument := "";
+	else if (argument == "nil")
+	{
+		op_simple("push_nil");
+		return;
+	}
+	else if (argument == "array byte")
+	{
+		op_simple("push_abyte");
+		return;
+	}
+	else if (argument == "array int")
+	{
+		op_simple("push_aint");
+		return;
+	}
+	else if (argument == "array object")
+	{
+		op_simple("push_aobj");
+		return;
+	}
+	else if (argument == "dict byte")
+	{
+		op_simple("push_dbyte");
+		return;
+	}
+	else if (argument == "dict int")
+	{
+		op_simple("push_dint");
+		return;
+	}
+	else if (argument == "dict object")
+	{
+		op_simple("push_dobj");
+		return;
+	}
+	else
+	{
+		argument := escape(StringMid(argument, 1, sizeof(argument)-2));
+		size := sizeof(argument);
+	}
+			
+	if (size == 0)
+		op_simple("pusho");
+	else if (size < 256)
+	{
+		emit(op["pusho"][OP_VALUE] + 1);
+		emit(size);
+		emit_string(argument);
+	} else {
+		emit(op["pusho"][OP_VALUE] + 2);
+		emit_short(size);
+		emit_string(argument);
+	}
+}
+
+// ===========================================================================
+//                               MAIN PROGRAM
+// ===========================================================================
+
+// This is a function only for the C-translated version. The real version
+// will have this as root-level code.
+
+function void main
+{
+	LoadOps();
+	ProcessCommandLine();
+
+	errors := 0;
+	codegen := 0;
+	changeflag := 0;
+	process();
+	
+	do {
+		errors := 1;
+		codegen := 0;
+		changeflag := 0;
+		process();
+	} while (changeflag == 1);
+	
+	errors := 1;
+	codegen := 1;
+	changeflag := 0;
+	EmitHeader(pc);
+	process();
+	StreamClose(outfile);
+}
+
+end;

@@ -1,0 +1,2334 @@
+// Mercat compiler
+// (C) 1998 David Given
+
+library standard;
+
+// --- Prototypes ------------------------------------------------------------
+
+inline array string AppGetArguments
+{"sys AppGetArguments"}
+
+inline string AppGetErrorString
+{"sys AppGetErrorString"}
+
+inline void AppExit
+	int exitcode;
+{"sys AppExit"}
+
+inline void PrintString
+	int stream;
+	string message;
+{"sys PrintString"}
+
+inline void PrintInt
+	int stream;
+	int value;
+{"sys PrintInt"}
+
+inline void PrintNL
+	int stream;
+{"sys PrintNL"}
+
+inline int StreamOpenFile
+	string filename;
+	string flags;
+{"sys StreamOpenFile"}
+
+inline void StreamClose
+	int stream;
+{"sys StreamClose"}
+
+inline string StreamReadChar
+	int stream;
+{"sys StreamReadChar"}
+
+inline void StreamWriteByte
+	int stream;
+	int value;
+{"sys StreamWriteByte"}
+
+inline string StreamReadLine
+	int stream;
+{"sys StreamReadLine"}
+
+inline void StreamSeek
+	int stream;
+	int pos;
+{"sys StreamSeek"}
+
+inline int StreamEOF
+	int stream;
+{"sys StreamEOF"}
+
+inline int IsWhiteSpace
+	string s;
+{"sys IsWhiteSpace"}
+
+inline int IsDigit
+	string s;
+{"sys IsDigit"}
+
+inline int IsAlpha
+	string s;
+{"sys IsAlpha"}
+
+inline int IsAlphaNumeric
+	string s;
+{"sys IsAlphaNumeric"}
+
+inline int StringToInt
+	string s;
+{"pushi 10\n
+sys StringToIntRadix"}
+
+inline int StringToIntRadix
+	string s;
+	int radix;
+{"sys StringIntRadix"}
+
+inline string IntToString
+	int l;
+{"pushi 10\n
+sys IntToStringRadix"}
+
+inline string IntToStringRadix
+	int l;
+	int radix;
+{"sys IntToStringRadix"}
+
+inline string StringMid
+	string s;
+	int from;
+	int to;
+{"sys StringMid"}
+
+inline int StringInstr
+	string s;
+	string target;
+	int start;
+{"sys StringInstr"}
+
+inline int StringByte
+	string s;
+{"sys StringByte"}
+
+inline string ByteString
+	int c;
+{"sys ByteString"}
+
+inline string StringStrip
+	string s;
+{"sys StringStrip"}
+
+inline void DebugPrintDictArrayLong
+	dict array int d;
+{"sys DebugPrintObj"}
+
+inline void DebugPrintDictLong
+	dict int d;
+{"sys DebugPrintObj"}
+
+//endprotos
+
+global int stdin := 0;
+global int stdout := 1;
+global int stderr := 2;
+
+// ===========================================================================
+//                   GLOBAL VARIABLES & INITIALISATION CODE
+// ===========================================================================
+
+// --- Tokens ----------------------------------------------------------------
+
+// Symbolic
+
+global int TOKEN_UNKNOWN		:= 0;
+global int TOKEN_STRING			:= 1;
+global int TOKEN_INTEGER		:= 2;
+global int TOKEN_OP			:= 3;
+global int TOKEN_CP			:= 4;
+global int TOKEN_OB			:= 5;
+global int TOKEN_CB			:= 6;
+global int TOKEN_OS			:= 7;
+global int TOKEN_CS			:= 8;
+global int TOKEN_EOS			:= 9;
+global int TOKEN_COMMA			:= 10;
+global int TOKEN_LESSTHAN		:= 11;
+global int TOKEN_GREATERTHAN		:= 12;
+global int TOKEN_LESSTHANEQUALS		:= 13;
+global int TOKEN_GREATERTHANEQUALS	:= 14;
+global int TOKEN_EQUALS			:= 15;
+global int TOKEN_NOTEQUALS		:= 16;
+global int TOKEN_BECOMES		:= 17;
+global int TOKEN_MULTIPLY		:= 18;
+global int TOKEN_DIVIDE			:= 19;
+global int TOKEN_ADD			:= 20;
+global int TOKEN_SUBTRACT		:= 21;
+global int TOKEN_NOT			:= 22;
+global int TOKEN_SHIFTLEFT		:= 23;
+global int TOKEN_SHIFTRIGHT		:= 24;
+global int TOKEN_WORD			:= 25;
+
+global int TOKEN_LIBRARY		:= 26;
+global int TOKEN_GLOBAL			:= 27;
+global int TOKEN_FUNCTION		:= 28;
+global int TOKEN_PROTOTYPE		:= 29;
+global int TOKEN_INLINE			:= 30;
+global int TOKEN_END			:= 31;
+global int TOKEN_CONTAINS		:= 32;
+global int TOKEN_OR			:= 33;
+global int TOKEN_MOD			:= 34;
+global int TOKEN_AND			:= 35;
+global int TOKEN_SIZEOF			:= 36;
+global int TOKEN_CREATE			:= 37;
+global int TOKEN_RETURN			:= 38;
+global int TOKEN_LIST			:= 39;
+global int TOKEN_IF			:= 40;
+global int TOKEN_WHILE			:= 41;
+global int TOKEN_BREAK			:= 42;
+global int TOKEN_DO			:= 43;
+global int TOKEN_FOR			:= 44;
+global int TOKEN_DELETE			:= 45;
+global int TOKEN_ELSE			:= 46;
+
+global int TOKEN__MAX			:= 47;
+
+global dict int string_to_token := init_string_to_token();
+global array string token_to_string := init_token_to_string();
+
+global string tokens;			// Current string value of token
+global int tokeni;			// Current integer value of token
+global string tokens_pushed;		// Next string value (if any)
+global int tokeni_pushed;		// Next integer value (if any)
+global int token_pushed := -1;		// Next token (if any)
+
+global string line;			// Line being parsed
+global int linenum;			// Current line number
+
+// --- Symbol tables ---------------------------------------------------------
+
+// This is what I'd really like:
+//
+// structure {
+//	int otype;		// Object type (type, function, global etc)
+//	string ntype;		// Native type
+//	int collection;		// Is it a collection?
+//	string contains;	// If so, what's in it
+//	array string args;	// If it's a function, arguments here
+//	dict string elements;	// If it's a structure, elements here
+// } symbol;
+//
+// global array dict symbol;		// Symbol tables
+// global int symbolcount;		// How many symbol tables
+//
+// Unfortunately, we don't have structures yet. Instead I'm going to fake
+// it. This is a little unpleasant.
+
+global int OTYPE_TYPE		:= 1;
+global int OTYPE_VAR		:= 2;
+global int OTYPE_FUNCTION	:= 3;
+global int OTYPE__MAX		:= 4;
+
+global array string otype_to_string := init_otype_to_string();
+
+global dict int db_otype;
+global dict string db_ntype;
+global dict int db_collection;
+global dict string db_contains;
+global dict array string db_args;
+global dict dict string db_elements;
+global dict int db_sp;
+global dict int db_alloced;
+
+global dict int ldb_otype;
+global dict string ldb_ntype;
+global dict int ldb_collection;
+global dict string ldb_contains;
+global dict array string ldb_args;
+global dict dict string ldb_elements;
+global dict int ldb_sp;
+
+// --- Miscellaneous ---------------------------------------------------------
+
+global string breakcmd;			// How to break of current structure
+global int sp;				// Stack pointer, more or less
+global int fp;				// Frame pointer, more or less
+global int tag;				// Current tag number
+
+global string funcname;			// Current function being compiled
+global string functype;			// Type of current function
+
+global int pass;			// What pass we're on
+global int infile := stdin;		// Input file handle
+global int outfile := stdout;		// Ouput file handle
+
+global array string emitqueue;		// Code emission queue
+global int queuecount := -1;		// Size of above
+
+// ==========================================================================
+//                            INITIALISATION CODE
+// ==========================================================================
+
+// --- Token lookup databases -----------------------------------------------
+
+function array string init_token_to_string
+{
+	array string a;
+	sizeof(a) := TOKEN__MAX;
+	
+	a[TOKEN_UNKNOWN]		:= "[internal error]";
+	a[TOKEN_STRING]			:= "string";
+	a[TOKEN_INTEGER]		:= "integer";
+	a[TOKEN_OP]			:= "(";
+	a[TOKEN_CP]			:= ")";
+	a[TOKEN_OB]			:= "{";
+	a[TOKEN_CB]			:= "}";
+	a[TOKEN_OS]			:= "[";
+	a[TOKEN_CS]			:= "]";
+	a[TOKEN_EOS]			:= "semicolon";
+	a[TOKEN_COMMA]			:= "comma";
+	a[TOKEN_LESSTHAN]		:= "<";
+	a[TOKEN_GREATERTHAN]		:= ">";
+	a[TOKEN_LESSTHANEQUALS]		:= "<=";
+	a[TOKEN_GREATERTHANEQUALS]	:= ">=";
+	a[TOKEN_EQUALS]			:= "=";
+	a[TOKEN_NOTEQUALS]		:= "!=";
+	a[TOKEN_BECOMES]		:= ":=";
+	a[TOKEN_MULTIPLY]		:= "*";
+	a[TOKEN_DIVIDE]			:= "/";
+	a[TOKEN_ADD]			:= "+";
+	a[TOKEN_SUBTRACT]		:= "-";
+	a[TOKEN_NOT]			:= "!";
+	a[TOKEN_SHIFTLEFT]		:= "<<";
+	a[TOKEN_SHIFTRIGHT]		:= ">>";
+	a[TOKEN_WORD]			:= "identifier";
+	
+	a[TOKEN_LIBRARY]		:= "'library'";
+	a[TOKEN_FUNCTION]		:= "'function'";
+	a[TOKEN_INLINE]			:= "'inline'";
+	a[TOKEN_PROTOTYPE]		:= "'prototype'";
+	a[TOKEN_END]			:= "'end'";
+	a[TOKEN_GLOBAL]			:= "'global'";
+	a[TOKEN_CONTAINS]		:= "'contains'";
+	a[TOKEN_OR]			:= "'or'";
+	a[TOKEN_MOD]			:= "'mod'";
+	a[TOKEN_AND]			:= "'and'";
+	a[TOKEN_SIZEOF]			:= "'sizeof'";
+	a[TOKEN_CREATE]			:= "'create'";
+	a[TOKEN_LIST]			:= "'list'";
+	a[TOKEN_RETURN]			:= "'return'";
+	a[TOKEN_IF]			:= "'if'";
+	a[TOKEN_WHILE]			:= "'while'";
+	a[TOKEN_BREAK]			:= "'break'";
+	a[TOKEN_DO]			:= "'do'";
+	a[TOKEN_FOR]			:= "'for'";
+	a[TOKEN_DELETE]			:= "'delete'";
+	a[TOKEN_ELSE]			:= "'else'";
+	
+	return a;
+}
+
+function dict int init_string_to_token
+{
+	dict int d;
+	
+	d["library"]			:= TOKEN_LIBRARY;
+	d["function"]			:= TOKEN_FUNCTION;
+	d["inline"]			:= TOKEN_INLINE;
+	d["prototype"]			:= TOKEN_PROTOTYPE;
+	d["end"]			:= TOKEN_END;
+	d["global"]			:= TOKEN_GLOBAL;
+	d["contains"]			:= TOKEN_CONTAINS;
+	d["or"]				:= TOKEN_OR;
+	d["mod"]			:= TOKEN_MOD;
+	d["and"]			:= TOKEN_AND;
+	d["sizeof"]			:= TOKEN_SIZEOF;
+	d["create"]			:= TOKEN_CREATE;
+	d["list"]			:= TOKEN_LIST;
+	d["return"]			:= TOKEN_RETURN;
+	d["if"]				:= TOKEN_IF;
+	d["while"]			:= TOKEN_WHILE;
+	d["break"]			:= TOKEN_BREAK;
+	d["do"]				:= TOKEN_DO;
+	d["for"]			:= TOKEN_FOR;
+	d["delete"]			:= TOKEN_DELETE;
+	d["else"]			:= TOKEN_ELSE;
+	
+	return d;
+}
+
+function array string init_otype_to_string
+{
+	array string a;
+	sizeof(a) := OTYPE__MAX;
+	
+	a[OTYPE_TYPE]			:= "type";
+	a[OTYPE_VAR]			:= "variable";
+	a[OTYPE_FUNCTION]		:= "function";
+	return a;
+}
+
+function void init_type_database
+{
+	db_otype["void"]		:= OTYPE_TYPE;
+	db_ntype["void"]		:= "!";
+	db_collection["void"]		:= 0;
+
+	db_otype["byte"]		:= OTYPE_TYPE;
+	db_ntype["byte"]		:= "int";
+	db_collection["byte"]		:= 0;
+		
+	db_otype["int"]			:= OTYPE_TYPE;
+	db_ntype["int"]			:= "int";
+	db_collection["int"]		:= 0;
+	
+	db_otype["string"]		:= OTYPE_TYPE;
+	db_ntype["string"]		:= "\"\"";
+	db_collection["string"]		:= 0;
+
+	db_otype["array"]		:= OTYPE_TYPE;
+	db_ntype["array"]		:= "array object";
+	db_collection["array"]		:= 2;
+
+	db_otype["dict"]		:= OTYPE_TYPE;
+	db_ntype["dict"]		:= "dict object";
+	db_collection["dict"]		:= 2;
+	
+	db_otype["array byte"]		:= OTYPE_TYPE;
+	db_ntype["array byte"]		:= "array byte";
+	db_collection["array byte"]	:= 1;
+	db_contains["array byte"]	:= "int";
+	
+	db_otype["array int"]		:= OTYPE_TYPE;
+	db_ntype["array int"]		:= "array int";
+	db_collection["array int"]	:= 1;
+	db_contains["array int"]	:= "int";
+	
+	db_otype["array string"]	:= OTYPE_TYPE;
+	db_ntype["array string"]	:= "array object";
+	db_collection["array string"]	:= 1;
+	db_contains["array string"]	:= "string";
+
+	db_otype["dict string"]		:= OTYPE_TYPE;
+	db_ntype["dict string"]		:= "dict object";
+	db_collection["dict string"]	:= 1;
+	db_contains["dict string"]	:= "string";
+
+	db_otype["dict int"]		:= OTYPE_TYPE;
+	db_ntype["dict int"]		:= "dict int";
+	db_collection["dict int"]	:= 1;
+	db_contains["dict int"]		:= "int";
+}
+
+// ============================================================================
+//                            UTILITY FUNCTIONS
+// ============================================================================
+
+// Stops on an error, giving the line number
+
+function void error
+	string s;
+{
+	PrintString(stderr, "Error: ");
+	PrintString(stderr, s);
+	PrintString(stderr, " at line ");
+	PrintInt(stderr, linenum);
+	PrintNL(stderr);
+	AppExit(1);
+}
+
+// Splits a string up into words
+
+function array string split
+	string s;
+{
+	array string a;
+	int size := sizeof(s);
+	int i := 0;
+	int j := 0;
+	string c;
+	
+	sizeof(a) := 1;
+	while (i<size)
+	{
+		c := s[i];
+		i := i + 1;
+		if (IsWhiteSpace(c))
+		{
+			j := j + 1;
+			sizeof(a) := j + 1;
+			a[j] := "";
+		}
+		else
+			a[j] := a[j] + c;
+	}
+	return a;
+}
+
+// Tests if a character is valid in a word
+
+function int iswordchar
+	string c;
+{
+	return IsAlphaNumeric(c) or (c == "_") or (c == "@");
+}
+
+// Converts \\n in a string to \n
+
+function string escape
+	string s;
+{
+	int i := StringInstr(s, "\\n", 0);
+	
+	if (i == -1)
+		return s;
+	
+	if (i == 0)
+		return "\n"+StringMid(s, 2, -1);
+	
+	return StringMid(s, 0, i)+"\n"+StringMid(s, i+2, -1);
+}
+		
+// ============================================================================
+//                              CODE EMISSION
+// ============================================================================
+
+// Emits some code (or puts it in the queue)
+
+function void emit
+	string s;
+{
+	if (queuecount >= 0)
+		emitqueue[queuecount] := emitqueue[queuecount] + s;
+	else
+		PrintString(outfile, s);
+}
+
+// New entry on the emit queue
+
+function void queue
+{
+	queuecount := queuecount + 1;
+	sizeof(emitqueue) := queuecount + 1;
+	emitqueue[queuecount] := "";
+}
+
+// Remove an item from the emit queue
+
+function string dequeue
+{
+	string s := emitqueue[queuecount];
+	emitqueue[queuecount] := "";
+	queuecount := queuecount - 1;
+	sizeof(emitqueue) := queuecount + 1;
+	return s;
+}
+
+// Creates a new tag
+
+function int mktag
+{
+	tag := tag + 1;
+	return tag - 1;
+}
+
+// Emits a tag
+
+function void emit_tag
+	int t;
+{
+	emit(": _");
+	emit(IntToString(t));
+	emit("\n");
+}
+	
+// Emits an instruction with no arguments
+
+function void emitop
+	string op;
+{
+	emit("\t");
+	emit(op);
+	emit("\n");
+}
+
+// Emits an instruction with a string argument
+
+function void emitops
+	string op;
+	string arg;
+{
+	emit("\t");
+	emit(op);
+	emit(" ");
+	emit(arg);
+	emit("\n");
+}
+
+// Emits an instruction with an integer argument
+
+function void emitopi
+	string op;
+	int arg;
+{
+	emit("\t");
+	emit(op);
+	emit(" ");
+	emit(IntToString(arg));
+	emit("\n");
+}
+
+// Emits an instruction with a tag argument
+
+function void emitt
+	string op;
+	int arg;
+{
+	emit("\t");
+	emit(op);
+	emit(" _");
+	emit(IntToString(arg));
+	emit("\n");
+}
+
+// ============================================================================
+//                                    LEXER
+// ============================================================================
+
+// Read in a character
+
+function string getchar
+{
+	string c;
+	
+	if (line == "")
+	{
+		while (line == "")
+		{
+			linenum := linenum + 1;
+			line := StreamReadLine(infile);
+			if (StreamEOF(infile))
+				error("Unexpected EOF!");
+			if (pass == 2)
+			{
+				emit("# ");
+				emit(line);
+				emit("\n");
+			}
+		}
+		line := " " + line;
+	}
+
+	c := line[0];
+	line := StringMid(line, 1, -1);
+	return c;
+}
+
+// Push a character back into the buffer
+
+function void putchar
+	string c;
+{
+	line := c + line;
+}
+
+// Take a look at the next character, without reading it
+
+function string peekc
+{
+	string c;
+
+	if (line == "")
+	{
+		c := getchar();
+		putchar(c);
+		return c;
+	}
+	return line[0];
+}
+
+// ============================================================================
+//                                   PARSER
+// ============================================================================
+
+// Reads a token from the input stream
+
+function int readtoken
+{
+	string c;
+	int i;
+
+	if (token_pushed == -1)
+	{
+		while (IsWhiteSpace(peekc()))
+			c := getchar();
+		c := getchar();
+			
+		if (c == "\"")
+		{
+			tokens := "";
+			while (peekc() != "\"")
+			{
+				if (peekc() == "\\")
+					tokens := tokens + getchar() + getchar();
+				else
+					tokens := tokens + getchar();
+			}
+				
+			if (getchar() != "\"")
+				error("Unmatched \"");
+			
+			return TOKEN_STRING;
+		} else if (c == "(")
+			return TOKEN_OP;
+		else if (c == ")")
+			return TOKEN_CP;
+		else if (c == "{")
+			return TOKEN_OB;
+		else if (c == "}")
+			return TOKEN_CB;
+		else if (c == "[")
+			return TOKEN_OS;
+		else if (c == "]")
+			return TOKEN_CS;
+		else if (c == ",")
+			return TOKEN_COMMA;
+		else if (c == ";")
+			return TOKEN_EOS;
+		else if (c == "/")
+		{
+			if (peekc() == "/")
+			{
+				line := "";
+				return readtoken();
+			}
+			return TOKEN_DIVIDE;
+		} else if (c == "*")
+			return TOKEN_MULTIPLY;
+		else if (c == "+")
+			return TOKEN_ADD;
+		else if (c == "-")
+			return TOKEN_SUBTRACT;
+		else if (c == ":")
+		{
+			if (peekc() == "=")
+			{
+				c := getchar();
+				return TOKEN_BECOMES;
+			}
+		}
+		else if (c == "!")
+		{
+			if (peekc() == "=")
+			{
+				c := getchar();
+				return TOKEN_NOTEQUALS;
+			}
+			else
+				return TOKEN_NOT;
+		}
+		else if (c == "<")
+		{
+			if (peekc() == "=")
+			{
+				c := getchar();
+				return TOKEN_LESSTHANEQUALS;
+			} else if (peekc() == ">")
+			{
+				c := getchar();
+				return TOKEN_NOTEQUALS;
+			} else if (peekc() == "<")
+			{
+				c := getchar();
+				return TOKEN_SHIFTLEFT;
+			}
+			return TOKEN_LESSTHAN;
+		} else if (c == ">")
+		{
+			if (peekc() == "=")
+			{
+				c := getchar();
+				return TOKEN_GREATERTHANEQUALS;
+			}
+			else if (peekc() == ">")
+			{
+				c := getchar();
+				return TOKEN_SHIFTRIGHT;
+			}
+			return TOKEN_GREATERTHAN;
+		} else if (c == "=")
+		{
+			if (peekc() == "=")
+			{
+				c := getchar();
+				return TOKEN_EQUALS;
+			}
+		} else if (IsDigit(c))
+		{
+			tokens := c;
+			while (IsDigit(peekc()))
+				tokens := tokens + getchar();
+			tokeni := StringToInt(tokens);
+			return TOKEN_INTEGER;
+		} else if (iswordchar(c))
+		{
+			tokens := c;
+			while (iswordchar(peekc()))
+				tokens := tokens + getchar();
+			if (string_to_token contains tokens)
+				return string_to_token[tokens];
+			return TOKEN_WORD;
+		}
+		
+		error("Unknown character on input '" + c + "'");
+	}
+	else
+	{
+		i := token_pushed;
+		token_pushed := -1;
+		tokens := tokens_pushed;
+		tokens_pushed := "";
+		tokeni := tokeni_pushed;
+		tokeni_pushed := 0;
+		return i;
+	}
+}
+
+// Look at the next token, without reading it (warning: corrupts tokens and
+// tokeni)
+
+function int peek
+{
+	if (token_pushed == -1)
+	{
+		token_pushed := readtoken();
+		tokens_pushed := tokens;
+		tokeni_pushed := tokeni;
+	}
+
+	return token_pushed;
+}
+
+// Push a token back into the input stream
+
+function void pushtoken
+	int t;
+	string ts;
+	int ti;
+{
+	if (token_pushed != -1)
+		error("Can't call pushtoken twice in succession");
+	
+	token_pushed := t;
+	tokens_pushed := ts;
+	tokeni_pushed := ti;
+}
+
+// Convenience function that assures that two tokens are the same
+
+function void ensuretoken
+	int t1;
+	int t2;
+{
+	if (t1 != t2) 
+		error("Expected "
+			+token_to_string[t2]
+			+", got "
+			+token_to_string[t1]);
+}
+
+// Shorthand for above with TOKEN_EOS
+
+function void ensureeos
+{
+	ensuretoken(readtoken(), TOKEN_EOS);
+}
+
+// Reads in a type, adding it to the type database if necessary
+
+function string readtype
+{
+	string t;
+	int i;
+	int j;
+	int n;
+	array string a;
+	string source;
+	string target;
+	
+	t := "";
+	while (1)
+	{
+		if (peek() != TOKEN_WORD)
+			break;
+			
+		if !(db_otype contains tokens)
+			break;
+		
+		if (db_otype[tokens] != OTYPE_TYPE)
+			break;
+		
+		i := readtoken();
+		t := t + " " + tokens;
+	}
+
+	if (t == "")
+	{
+		if !(db_otype contains tokens)
+			error("Undefined symbol '"+tokens+"'");
+	
+		if (db_otype[tokens] != OTYPE_TYPE)
+			error("Expected a type, got "+tokens);
+	}		
+	
+	t := StringMid(t, 1, -1);
+	a := split(t);
+	n := sizeof(a);
+
+	if (n>1)
+	{	
+		if (n>2)
+		{
+			for(i:=0; i<(n-2); i:=i+1)
+			{
+				source := "";
+				target := "";
+				for (j:=i; j<n; j:=j+1)
+				{
+					source := source + " " + a[j];
+					if (j != i)
+						target := target + " " + a[j];
+				}
+			
+				source := StringMid(source, 1, -1);
+				target := StringMid(target, 1, -1);
+			
+				db_otype[source] := OTYPE_TYPE;
+				db_ntype[source] := db_ntype[a[i]];
+				db_collection[source] := 2;
+				db_contains[source] := target;
+			}
+		}
+		
+		if !(db_otype contains a[n-1])
+			error("Undefined symbol "+a[n-1]);
+		
+		if (db_otype[a[n-1]] != OTYPE_TYPE)
+			error("Expected a type, got "+a[n-1]);
+			
+		if (db_collection[a[n-1]] == 2)
+			error("The type '"+t+"' is not completely specified");
+	}
+
+	tokens := t;
+	return db_ntype[tokens];
+}
+
+// Check that an object is out of scope
+
+function void outofscope
+	string name;
+	int scope;
+{
+	if (scope and 2)
+		if (db_otype contains name)
+			error("Redefined symbol "
+				+name
+				+" (already defined as global "
+				+otype_to_string[db_otype[name]]
+				+")");
+	if (scope and 1)
+		if (ldb_otype contains name)
+			error("Redefined symbol "
+				+name
+				+" (already defined as local "
+				+otype_to_string[ldb_otype[name]]
+				+")");
+}
+
+// Check that an object is in scope --- identical to lookup_otype
+
+function int inscope
+	string name;
+{
+	return lookup_otype(name);
+}
+
+// Which scope is an object in?
+
+function int scope
+	string name;
+{
+	if (ldb_otype contains name)
+		return 1;
+	if (db_otype contains name)
+		return 2;
+		
+	error("Undefined symbol '"+name+"'.");
+}
+
+// Look up fields in the scope database
+
+function int lookup_otype
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_otype[name];
+	if (db_otype contains name)
+		return db_otype[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function string lookup_ntype
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_ntype[name];
+	if (db_otype contains name)
+		return db_ntype[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function int lookup_collection
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_collection[name];
+	if (db_otype contains name)
+		return db_collection[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function string lookup_contains
+	string name;	
+{
+	if (ldb_otype contains name)
+		return ldb_contains[name];
+	if (db_otype contains name)
+		return db_contains[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function array string lookup_args
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_args[name];
+	if (db_otype contains name)
+		return db_args[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function dict string lookup_elements
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_elements[name];
+	if (db_otype contains name)
+		return db_elements[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+function int lookup_sp
+	string name;
+{
+	if (ldb_otype contains name)
+		return ldb_sp[name];
+	if (db_otype contains name)
+		return db_sp[name];
+	
+	error("Undefined symbol '"+name+"'.");
+}
+
+// ============================================================================
+//                                TOP LEVEL CODE
+// ============================================================================
+
+// Pass 1
+
+function void do_pass1
+{
+	int t;
+	
+	pass := 1;
+	while(1) {
+		t := readtoken();
+		if (t == TOKEN_END)
+			return;
+		else if ((t == TOKEN_LIBRARY) or
+			 (t == TOKEN_GLOBAL))
+			while (readtoken() != TOKEN_EOS)
+			{
+			}
+		else if ((t == TOKEN_FUNCTION) or
+			 (t == TOKEN_PROTOTYPE) or
+			 (t == TOKEN_INLINE))
+			do_function(-1);
+		else
+		{
+			if (t == TOKEN_WORD)
+				error("Unknown directive "+tokens);
+			error("Unknown token "+token_to_string[t]);
+		}
+	}
+}
+
+// Pass 2
+
+function void do_pass2
+{
+	int t;
+	
+	pass := 2;
+	sp := 1;
+	while(1) {
+		t := readtoken();
+		if (t == TOKEN_END)
+			return;
+		else if (t == TOKEN_LIBRARY)
+			do_library();
+		else if (t == TOKEN_GLOBAL)
+			do_global();
+		else if (t == TOKEN_FUNCTION)
+			do_function(0);
+		else if (t == TOKEN_PROTOTYPE)
+			do_function(1);
+		else if (t == TOKEN_INLINE)
+			do_function(2);
+		else
+			error("Unknown directive " + tokens);
+	}
+}
+
+// ============================================================================
+//                                COMPILER NODES
+// ============================================================================
+
+function void do_library
+{
+	ensuretoken(readtoken(), TOKEN_WORD);
+	ensureeos();
+}
+
+function void do_function
+	int proto;
+{
+	string nt := readtype();
+	string st := tokens;
+	string n;
+	string pnt;
+	string pst;
+	string pn;
+	int p;
+	int i;
+	int tag;
+
+	ensuretoken(readtoken(), TOKEN_WORD);
+	n := tokens;
+
+	fp := sp;
+	if (proto == 0)
+	{
+		PrintString(stderr, n);
+		PrintNL(stderr);
+	}
+	
+	if (db_alloced contains n)
+	{
+		if (db_alloced[n] != -1)
+			outofscope(n, 2);
+	}
+
+	db_otype[n] := OTYPE_FUNCTION;
+	db_alloced[n] := proto;
+	db_contains[n] := st;
+	
+	db_args[n] := create(array string);
+	p := 0;
+	while (peek() != TOKEN_OB)
+	{
+		pnt := readtype();
+		pst := tokens;
+		ensuretoken(readtoken(), TOKEN_WORD);
+		pn := tokens;
+		if (ldb_otype contains pn)
+			error("Symbol '"+pn
+				+"' already defined as local "
+				+otype_to_string[ldb_otype[pn]]);
+			
+		ldb_otype[pn] := OTYPE_VAR;
+		ldb_ntype[pn] := pst;
+		ldb_sp[pn] := sp - fp;
+		
+		if (proto == 0)
+			emit("# argument "+pn
+				+" of type "
+				+pst
+				+" at "
+				+IntToString(ldb_sp[pn])
+				+"\n");
+		
+		sp := sp + 1;
+		
+		sizeof(db_args[n]) := p+1;	
+		db_args[n][p] := pst;
+		p := p + 1;
+		ensureeos();
+	}
+	if (st == "void")
+		db_sp[n] := sp - fp;
+	else
+		db_sp[n] := sp - fp - 1;
+	
+	if ((proto == 1) or (proto == -1))
+	{
+		ensuretoken(readtoken(), TOKEN_OB);
+		p := 1;
+		while (p>0)
+		{
+			i := readtoken();
+			if (i == TOKEN_OB)
+				p := p + 1;
+			else if (i == TOKEN_CB)
+				p := p - 1;
+		}
+		
+		ldb_otype := create(dict int);
+		ldb_ntype := create(dict string);
+		ldb_collection := create(dict int);
+		ldb_contains := create(dict string);
+		ldb_args := create(dict array string);
+		ldb_elements := create(dict dict string);
+		ldb_sp := create(dict int);
+		
+		sp := fp;
+		return;
+	}
+	else if (proto == 2)
+	{
+		ensuretoken(readtoken(), TOKEN_OB);
+		ensuretoken(readtoken(), TOKEN_STRING);
+		db_ntype[n] := tokens;
+		ensuretoken(readtoken(), TOKEN_CB);
+		
+		ldb_otype := create(dict int);
+		ldb_ntype := create(dict string);
+		ldb_collection := create(dict int);
+		ldb_contains := create(dict string);
+		ldb_args := create(dict array string);
+		ldb_elements := create(dict dict string);
+		ldb_sp := create(dict int);
+		
+		sp := fp;
+		return;
+	}
+	else
+		ensuretoken(readtoken(), TOKEN_OB);
+
+	tag := mktag();
+	emitt("jump", tag);
+	emit(": "+n+"\n");
+		
+	while (peek() != TOKEN_CB)
+	{
+		funcname := n;
+		functype := st;
+		do_funclevel();
+	}
+	ensuretoken(readtoken(), TOKEN_CB);
+
+	if (functype != "void")
+	{
+		if (db_collection[st])
+		{
+			emitops("pusho", db_ntype[functype]);
+			emitop("saveo");
+		} else {
+			emitopi("pushi", 0);
+			emitop("savei");
+		}
+	}
+
+	emit(": _return_"+n+"\n");
+	do_funcexit();
+
+	ldb_otype := create(dict int);
+	ldb_ntype := create(dict string);
+	ldb_collection := create(dict int);
+	ldb_contains := create(dict string);
+	ldb_args := create(dict array string);
+	ldb_elements := create(dict dict string);
+	ldb_sp := create(dict int);
+		
+	emitop("return");
+	sp := fp;
+	emit_tag(tag);
+}
+
+function void do_funclevel
+{
+	int t := readtoken();
+	string s;
+	
+	if (t == TOKEN_WORD)
+	{
+		if (db_otype contains tokens)
+		{
+			if (db_otype[tokens] == OTYPE_TYPE)
+			{
+				pushtoken(TOKEN_WORD, tokens, tokeni);
+				do_local();
+			}
+			else if (db_otype[tokens] == OTYPE_FUNCTION)
+			{
+				s := tokens;
+				if (do_funccall(s) != "void")
+					error("Function call to '"+s+"' did not return void");
+				ensureeos();
+				emit("\n");
+			}
+			else if (db_otype[tokens] == OTYPE_VAR)
+			{
+				do_assignment(tokens);
+				ensureeos();
+				emit("\n");
+			}
+		}
+		else if (ldb_otype contains tokens)
+		{
+			if (ldb_otype[tokens] == OTYPE_VAR)
+			{
+				do_assignment(tokens);
+				ensureeos();
+				emit("\n");
+			}
+			else
+				error("Unexpected function-level directive '"+tokens+"'");
+		}
+		else
+			error("Unexpected function-level directive '"+tokens+"'");
+	}
+	else if (t == TOKEN_RETURN)
+	{
+		do_return();
+		ensureeos();
+		emit("\n");
+	}
+	else if (t == TOKEN_IF)
+		do_if();
+	else if (t == TOKEN_WHILE)
+		do_while();
+	else if (t == TOKEN_BREAK)
+		do_break();
+	else if (t == TOKEN_DO)
+		do_do();
+	else if (t == TOKEN_FOR)
+		do_for();
+	else if (t == TOKEN_SIZEOF)
+	{
+		do_setsize();
+		ensureeos();
+		emit("\n");
+	}
+	else if (t == TOKEN_DELETE)
+		do_delete();
+	else if (t == TOKEN_OB)
+	{
+		while (peek() != TOKEN_CB)
+			do_funclevel();
+		ensuretoken(readtoken(), TOKEN_CB);
+	}
+	else
+		error("Unexpected token "+token_to_string[t]);
+}
+	
+function string do_funccall
+	string name;
+{
+	int p;
+	int i;
+	string t;
+	string returntype;
+
+	ensuretoken(readtoken(), TOKEN_OP);
+	p := 0;
+	
+	if (db_alloced[name] != 2)
+		emitop("pushfp");
+	if (peek() != TOKEN_CP)
+	{
+		do {
+			t := do_rvalue();
+			if (p >= sizeof(db_args[name]))
+				error("In call to '"+name
+					+"', you used too many parameters.");
+					
+			if (db_args[name][p] != t)
+				error("In call to '"+name
+					+"', parameter "
+					+IntToString(p+1)
+					+" is a "
+					+t
+					+" when it should be a "
+					+db_args[name][p]);
+			p := p + 1;
+			i := readtoken();
+		} while (i == TOKEN_COMMA);
+		if (p != sizeof(db_args[name]))
+			error("In call to `"+name
+				+"', you specified "
+				+IntToString(p)
+				+" parameters when you should have had "
+				+IntToString(sizeof(db_args[name])));
+		ensuretoken(i, TOKEN_CP);
+	}
+	else
+		ensuretoken(readtoken(), TOKEN_CP);
+
+	returntype := lookup_contains(name);
+	if (db_alloced[name] == 2)
+		emit("\t"+escape(db_ntype[name])+"\n");
+	else
+	{
+		emitops("call", name);
+	
+		if (returntype != "void")
+		{
+			if (returntype == "int")
+				emitop("loadi");
+			else
+				emitop("loado");
+		}
+	}
+		
+	return returntype;
+}
+
+function void do_funcexit
+{
+	array string ldba := list(ldb_otype);
+	int i;
+	int ms;
+	string v;
+	
+	do {
+		ms := -1;
+		v := "";
+		for (i:=0; i<sizeof(ldba); i:=i+1)
+		{
+			if (ldb_otype[ldba[i]] == OTYPE_VAR)
+				if (ldb_sp[ldba[i]] > ms)
+				{
+					v := ldba[i];
+					ms := ldb_sp[v];
+				}
+		}
+		if (v != "")
+		{
+			ldb_sp[v] := -1;
+			emit("# retract over local var "+v+"\n");
+			if (ldb_ntype[v] == "int")
+				emitop("popi");
+			else
+				emitop("popo");
+		}
+	} while (ms != -1);
+}
+
+function void do_global
+{
+	string nt := readtype();
+	string st := tokens;
+	string n;
+	
+	ensuretoken(readtoken(), TOKEN_WORD);
+	n := tokens;
+	
+	outofscope(n, 2);
+	db_otype[n] := OTYPE_VAR;
+	db_ntype[n] := st;
+	emit("# global "+n+" of type "+db_ntype[n]+" at "+IntToString(sp)+"\n");
+	db_sp[n] := sp;
+
+	if (peek() == TOKEN_EOS)
+	{
+		ensureeos();
+		if (db_collection[st] or (st == "string"))
+			emitops("pusho", db_ntype[st]);
+		else
+			emitopi("pushi", 0);
+		sp := sp + 1;
+	}
+	else
+	{
+		ensuretoken(readtoken(), TOKEN_BECOMES);
+		if (do_rvalue() != st)
+			error("Initialisation of global '"+n+"' from wrong type");
+		ensureeos();
+		sp := sp + 1;
+	}	
+}
+
+function void do_local
+{
+	string nt := readtype();
+	string st := tokens;
+	string n;
+	string t;
+	
+	ensuretoken(readtoken(), TOKEN_WORD);
+	n := tokens;
+	outofscope(n, 1);
+	ldb_otype[n] := OTYPE_VAR;
+	ldb_ntype[n] := st;
+	ldb_sp[n] := sp - fp;
+	emit("# local "+n+" of type "+st+" at "+IntToString(sp-fp)+"\n");
+
+	if (peek() == TOKEN_EOS)
+	{
+		ensureeos();
+		if (db_collection[st] or (st == "string"))
+			emitops("pusho", db_ntype[st]);
+		else
+			emitopi("pushi", 0);
+		sp := sp + 1;
+	}
+	else
+	{
+		ensuretoken(readtoken(), TOKEN_BECOMES);
+		t := do_rvalue();
+		sp := sp + 1;
+		if (t != st)
+			error("Initialisation of local '"+n+"' from wrong type");
+		ensureeos();
+	}	
+}
+
+function void do_assignment
+	string name;
+{
+	string pcode;
+	string ptype;
+	string icode;
+	string itype;
+	string etype;
+	string nt;
+	int t := inscope(name);
+
+	if (t != OTYPE_VAR)
+		error("'"+name+"' is a "+otype_to_string[t]+", not a var");
+		
+	ptype := lookup_ntype(name);
+	queue();
+	if (lookup_ntype(ptype) == "int")
+		nt := "i";
+	else
+		nt := "o";
+		
+	if (scope(name) == 1)
+		emitopi("peek"+nt, 0-lookup_sp(name));
+	else
+		emitopi("peek"+nt, lookup_sp(name));
+	pcode := dequeue();
+	itype := "void";
+	while (peek() == TOKEN_OS)
+	{
+		t := readtoken();
+		queue();
+		itype := do_rvalue();
+		icode := dequeue();
+		ensuretoken(readtoken(), TOKEN_CS);
+		if (peek() == TOKEN_OS)
+		{
+			queue();
+			ptype := do_lookupnode(ptype, pcode, itype, icode);
+			pcode := dequeue();
+		}
+	}
+
+	ensuretoken(readtoken(), TOKEN_BECOMES);
+	
+	if (itype == "void")
+	{
+		if (lookup_ntype(ptype) == "int")
+			nt := "i";
+		else
+			nt := "o";
+		
+		etype := do_rvalue();
+		if (scope(name) == 1)
+			emitopi("poke"+nt, 0-lookup_sp(name));
+		else
+			emitopi("poke"+nt, lookup_sp(name));
+		if (etype != ptype)
+			error("You can't assign a "+etype+" value to a "+ptype+" variable");
+	}
+	else
+	{
+		queue();
+		etype := do_rvalue();
+		if (etype != lookup_contains(ptype))
+			error("You can't assign a "+etype+" value to a "+ptype+" variable");
+		do_storenode(ptype, pcode, itype, icode, dequeue());
+	}
+}
+
+function string do_rvalue
+{
+	string t1;
+	string s;
+	int op;
+	
+	queue();
+	t1 := do_rvalue_medpriority();
+	s := dequeue();
+	op := peek();
+	if ((op == TOKEN_EQUALS) or
+	    (op == TOKEN_NOTEQUALS) or
+	    (op == TOKEN_LESSTHAN) or
+	    (op == TOKEN_LESSTHANEQUALS) or
+	    (op == TOKEN_GREATERTHAN) or
+	    (op == TOKEN_GREATERTHANEQUALS) or
+	    (op == TOKEN_CONTAINS))
+		return do_lowpriority(readtoken(), t1, s);
+	else
+	{
+		emit(s);
+		return t1;
+	}
+}
+
+function string do_rvalue_medpriority
+{
+	string t1;
+	string s;
+	int op;
+
+	queue();
+	t1 := do_rvalue_highpriority();
+	s := dequeue();
+	op := peek();
+	if ((op == TOKEN_ADD) or
+	    (op == TOKEN_SUBTRACT) or
+	    (op == TOKEN_SHIFTLEFT) or
+	    (op == TOKEN_SHIFTRIGHT) or
+	    (op == TOKEN_OR))
+		return do_medpriority(readtoken(), t1, s);
+	else
+	{
+		emit(s);
+		return t1;
+	}
+}
+
+function string do_rvalue_highpriority
+{
+	string t1;
+	string s;
+	int op;
+	
+	queue();
+	t1 := do_rvalue_element();
+	s := dequeue();
+	op := peek();
+	if ((op == TOKEN_MULTIPLY) or
+	    (op == TOKEN_DIVIDE) or
+	    (op == TOKEN_MOD) or
+	    (op == TOKEN_AND))
+		return do_highpriority(readtoken(), t1, s);
+	else
+	{
+		emit(s);
+		return t1;
+	}
+}
+
+function string do_rvalue_element
+{
+	string s;
+	int t := readtoken();
+	
+	if (t == TOKEN_WORD)
+	{
+		if (ldb_otype contains tokens)
+		{
+			if (ldb_otype[tokens] == OTYPE_FUNCTION)
+				return do_funccall(tokens);
+			else if (ldb_otype[tokens] == OTYPE_VAR)
+				return do_varlookup(tokens);
+			else
+				error("Unexpected use of local symbol '"+tokens+"'");
+		}
+		else if (db_otype contains tokens)
+		{
+			if (db_otype[tokens] == OTYPE_FUNCTION)
+				return do_funccall(tokens);
+			else if (db_otype[tokens] == OTYPE_VAR)
+				return do_varlookup(tokens);
+			else
+				error("Unexpected use of global symbol '"+tokens+"'");
+		}
+		error("Undefined symbol '"+tokens+"'");
+	}
+	else if (t == TOKEN_SIZEOF)
+		return do_size();
+	else if (t == TOKEN_CREATE)
+		return do_create();
+	else if (t == TOKEN_LIST)
+		return do_list();
+	else if (t == TOKEN_NOT)
+		return do_not();
+	else if (t == TOKEN_OP)
+	{
+		s := do_rvalue();
+		ensuretoken(readtoken(), TOKEN_CP);
+		return s;
+	}
+	else if (t == TOKEN_SUBTRACT)
+	{
+		ensuretoken(readtoken(), TOKEN_INTEGER);
+		emitopi("pushi", 0-tokeni);
+		return "int";
+	}
+	else if (t == TOKEN_INTEGER)
+	{
+		emitopi("pushi", tokeni);
+		return "int";
+	}
+	else if (t == TOKEN_STRING)
+	{
+		emitops("pusho", "\""+tokens+"\"");
+		return "string";
+	}
+	else
+		error("Unexpected "+token_to_string[t]+" (tokens="+tokens+")");
+}
+
+function string do_lowpriority
+	int token;
+	string t1;
+	string lcode;
+{
+	int tag1;
+	int tag2;
+	string c;
+	string nt;
+	string t2;
+	
+	emit(lcode);
+	queue();
+	nt := db_ntype[t1];
+	
+	if (t1 == "int")
+	{
+		if (token == TOKEN_EQUALS)
+		{
+			emitop("sub");
+			emitop("itb");
+			emitop("not");
+		}
+		else if (token == TOKEN_NOTEQUALS)
+		{
+			emitop("sub");
+			emitop("itb");
+		}
+		else if (token == TOKEN_LESSTHAN)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("sub");
+			emitt("blt", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_GREATERTHAN)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("sub");
+			emitt("bgt", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_LESSTHANEQUALS)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("sub");
+			emitt("ble", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_GREATERTHANEQUALS)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("sub");
+			emitt("bge", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+	}
+	else if (t1 == "string")
+	{
+		if (token == TOKEN_EQUALS)
+		{
+			emitop("strcmp");
+			emitop("itb");
+			emitop("not");
+		}
+		else if (token == TOKEN_NOTEQUALS)
+		{
+			emitop("strcmp");
+			emitop("itb");
+		}
+		else if (token == TOKEN_LESSTHAN)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("strcmp");
+			emitt("blt", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_GREATERTHAN)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("strcmp");
+			emitt("bgt", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_LESSTHANEQUALS)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("strcmp");
+			emitt("ble", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+		else if (token == TOKEN_GREATERTHANEQUALS)
+		{
+			tag1 := mktag();
+			tag2 := mktag();
+			emitop("strcmp");
+			emitt("bge", tag1);
+			emitopi("pushi", 1);
+			emitt("jump", tag2);
+			emit_tag(tag1);
+			emitopi("pushi", 0);
+			emit_tag(tag2);
+		}
+	}
+	else if (StringMid(t1, 0, 4) == "dict")
+	{
+		if (token == TOKEN_CONTAINS)
+		{
+			emitop("statd");
+			t1 := "string";
+		}
+		else
+			error("`contains' on "+t1+" unimplemented");
+	}
+	else
+		error("You can't use "+token_to_string[token]+" on a "+t1);
+	
+	c := dequeue();
+			
+	t2 := do_rvalue_medpriority();
+	if (t1 != t2)
+		error("Type mismatch in low-priority clause; "+t1+" is not "+t2);
+	emit(c);
+
+	return "int";
+}
+
+function string do_medpriority
+	int token;
+	string t1;
+	string lcode;
+{
+	string t2;
+	string c;
+	string nt;
+
+	emit(lcode);
+	
+	queue();
+	nt := db_ntype[t1];
+
+	if (t1 == "int")
+	{
+		if (token == TOKEN_ADD)
+			emitop("add");
+		else if (token == TOKEN_SUBTRACT)
+			emitop("sub");
+		else if (token == TOKEN_OR)
+			emitop("or");
+		else if (token == TOKEN_SHIFTLEFT)
+			emitop("shl");
+		else if (token == TOKEN_SHIFTRIGHT)
+			emitop("shr");
+	}
+	else if (t1 == "string")
+	{
+		if (token == TOKEN_ADD)
+			emitop("concat");
+		else
+			error("Type mismatch in medium-priority clause; you can't use "+
+				token_to_string[TOKEN_ADD]+" on a "+t1);
+	}
+
+	c := dequeue();
+	
+	t2 := do_rvalue_medpriority();
+	if (t1 != t2)
+		error("Type mismatch in medium-priority clause; "+t1+" is not "+t2);
+	emit(c);
+	return t1;
+}
+
+function string do_highpriority
+	int token;
+	string t1;
+	string lcode;
+{
+	string t2;
+	string c;
+	string nt;
+	
+	emit(lcode);
+	queue();
+	nt := db_ntype[t1];
+
+	if (token == TOKEN_MULTIPLY)
+		emitop("mul");
+	else if (token == TOKEN_DIVIDE)
+		emitop("div");
+	else if (token == TOKEN_MOD)
+		emitop("mod");
+	else if (token == TOKEN_AND)
+		emitop("and");
+	c := dequeue();
+	
+	t2 := do_rvalue_highpriority();
+	if (t1 != t2)
+		error("Type mismatch in high-priority clause; "+t1+" is not "+t2);
+	emit(c);
+	return t1;
+}
+
+function string do_lookupnode
+	string ptype;
+	string pcode;
+	string itype;
+	string icode;
+{
+	if (StringMid(ptype, 0, 5) == "array")
+	{
+		if (itype != "int")
+			error("Can't use a "+itype+" as an index to an array");
+		emit(pcode);
+		emit(icode);
+		emitop("geta");
+		return db_contains[ptype];
+	} else if (StringMid(ptype, 0, 4) == "dict")
+	{
+		if (itype != "string")
+			error("Can't use a "+itype+" as an index to a dictionary");
+		emit(pcode);
+		emit(icode);
+		emitop("getd");
+		return db_contains[ptype];
+	} else if (ptype == "string")
+	{
+		if (itype != "int")
+			error("Can't use a "+itype+" as an index to a string");
+		emit(pcode);
+		emit(icode);
+		emitopi("pushi", 1);
+		emitop("sys StringMid");
+		return "string";
+	} else
+		error("You can't index a "+ptype+".");
+}
+
+function void do_storenode
+	string ptype;
+	string pcode;
+	string itype;
+	string icode;
+	string ecode;
+{
+	if (StringMid(ptype, 0, 5) == "array")
+	{
+		if (itype != "int")
+			error("Can't use a "+itype+" as an index to an array");
+		emit(ecode);
+		emit(pcode);
+		emit(icode);
+		emitop("seta");
+		return; // db_contains[ptype];
+	} else if (StringMid(ptype, 0, 4) == "dict")
+	{
+		if (itype != "string")
+			error("Can't use a "+itype+" as an index to a dictionary");
+		emit(ecode);
+		emit(pcode);
+		emit(icode);
+		emitop("setd");
+		return; // db[ptype];
+	} else
+		error("You can't index a "+ptype);
+}
+
+function string do_varlookup
+	string name;
+{
+	string ptype;
+	string pcode;
+	string itype;
+	string icode;
+	string nt;
+
+	if (inscope(name) != OTYPE_VAR)
+		error("'"+name+"' is a "
+			+otype_to_string[inscope(name)]
+			+", not a variable");
+		
+	ptype := lookup_ntype(name);
+	queue();
+	if (lookup_ntype(ptype) == "int")
+		nt := "i";
+	else
+		nt := "o";
+		
+	if (scope(name) == 1)
+		emitopi("peek"+nt, 0-lookup_sp(name));
+	else
+		emitopi("peek"+nt, lookup_sp(name));
+	pcode := dequeue();
+		
+	while (peek() == TOKEN_OS)
+	{
+		ensuretoken(readtoken(), TOKEN_OS);
+		queue();
+		itype := do_rvalue();
+		icode := dequeue();
+		ensuretoken(readtoken(), TOKEN_CS);
+		queue();
+		ptype := do_lookupnode(ptype, pcode, itype, icode);
+		pcode := dequeue();
+	}
+	emit(pcode);
+	return ptype;
+}
+
+function void do_if
+{
+	int tag1 := mktag();
+	int tag2 := mktag();
+	string t := do_rvalue();
+	int i;
+	
+	if (t != "int")
+		error("Type mismatch; expected primitive integer, got "+t+".");
+	emitt("bne", tag1);
+	
+	do_funclevel();
+	i := readtoken();
+	if (i == TOKEN_ELSE)
+	{
+		emitt("jump", tag2);
+		emit_tag(tag1);
+		do_funclevel();
+	}
+	else
+	{
+		emit_tag(tag1);
+		pushtoken(i, tokens, tokeni);
+	}
+	
+	emit_tag(tag2);
+}
+
+function void do_while
+{
+	int tag1 := mktag();
+	int tag2 := mktag();
+	string b;
+	
+	emit_tag(tag1);
+	if (do_rvalue() != "int")
+		error("while() can only take ints as condition code");
+	emitt("bne", tag2);
+	
+	b := breakcmd;
+	breakcmd := "\tjump _"+IntToString(tag2);
+	do_funclevel();
+	breakcmd := b;
+	
+	emitt("jump", tag1);
+	emit_tag(tag2);
+}
+
+function void do_do
+{
+	int tag1 := mktag();
+	int tag2 := mktag();
+	string b := breakcmd;
+	
+	emit_tag(tag1);
+	breakcmd := "\tjump _"+IntToString(tag2);
+	do_funclevel();
+	breakcmd := b;
+	ensuretoken(readtoken(), TOKEN_WHILE);
+	if (do_rvalue() != "int")
+		error("Argument to while() must be a int");
+	emitt("beq", tag1);
+	emit_tag(tag2);
+	ensureeos();
+}
+
+function void do_for
+{
+	int tag1 := mktag();
+	int tag2 := mktag();
+	string ccode;
+	string mcode;
+	string b;
+	
+	ensuretoken(readtoken(), TOKEN_OP);
+
+	ensuretoken(readtoken(), TOKEN_WORD);
+	do_assignment(tokens);
+	ensureeos();
+	
+	queue();
+	ccode := do_rvalue();
+	ccode := dequeue();
+	ensureeos();
+	
+	queue();
+	ensuretoken(readtoken(), TOKEN_WORD);
+	do_assignment(tokens);
+	mcode := dequeue();
+	
+	ensuretoken(readtoken(), TOKEN_CP);
+
+	emit_tag(tag1);
+	
+	emit(ccode);
+	emitt("bne", tag2);
+	
+	b := breakcmd;
+	queue();
+	emitt("jump", tag2);
+	breakcmd := dequeue();
+	do_funclevel();
+	breakcmd := b;
+
+	emit(mcode+"\n");
+	
+	emitt("jump", tag1);
+	emit_tag(tag2);
+}
+
+function string do_size
+{
+	string t;
+	
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := do_rvalue();
+	if (!db_collection[t] and (t != "string"))
+		error("Can't use sizeof() on something that's not an array or string");
+	
+	emitop("size");
+
+	ensuretoken(readtoken(), TOKEN_CP);
+	return "int";
+}
+
+function string do_create
+{
+	string t;
+	
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := readtype();
+	t := tokens;
+	if (t == "int")
+		emitop("pushi");
+	else
+		emitops("pusho", db_ntype[t]);
+	ensuretoken(readtoken(), TOKEN_CP);
+	return t;
+}
+
+function string do_list
+{
+	string t;
+	
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := do_rvalue();
+	ensuretoken(readtoken(), TOKEN_CP);
+	if (StringMid(t, 0, 4) != "dict")
+		error("Can't use list() on something that's not a dictionary");
+	emitops("sys", "DictToArray");
+	
+	return "array string";
+}
+		
+function string do_not
+{
+	string t := do_rvalue_element();
+	if (t != "int")
+		error("Can't use ! on anything but a int");
+	emitop("not");
+	return "int";
+}
+
+function void do_return
+{
+	string t;
+
+	if (functype != "void")
+	{
+		t := do_rvalue();
+		if (t != functype)
+			error("You tried to return a "+t+" from a function returning a "+functype+".");
+		if (db_ntype[functype] == "int")
+			emitop("savei");
+		else
+			emitop("saveo");
+	}
+	emitops("jump", "_return_"+funcname);
+}
+
+function void do_break
+{
+	if (breakcmd == "")
+		error("Found `break', but there's nothing to break out of");
+	
+	emit(breakcmd);
+	emit("\n");
+	ensureeos();
+}
+
+function void do_setsize
+{
+	string t;
+	string s;
+
+	ensuretoken(readtoken(), TOKEN_OP);
+	t := do_rvalue();
+	if (StringMid(t, 0, 5) != "array")
+		error("Can't use size() on something that's not an array");
+	ensuretoken(readtoken(), TOKEN_CP);
+	ensuretoken(readtoken(), TOKEN_BECOMES);
+	queue();
+	t := do_rvalue();
+	s := dequeue();
+	if (t != "int")
+		error("An array or dictionary size must be an integer");
+	emit(s);
+	emitop("resize");
+}
+
+function void do_delete
+{
+	error("delete unimplemented");
+}
+
+// ============================================================================
+//                                 MAIN PROGRAM
+// ============================================================================
+
+function void main
+{
+	array string args := AppGetArguments();
+	init_type_database();
+	
+	infile := StreamOpenFile(args[1], "r");
+	
+	PrintString(stderr, "Pass 1\n");
+	linenum := 0;
+	do_pass1();
+	StreamSeek(infile, 0);
+	line := "";
+	linenum := 0;
+	PrintString(stderr, "Pass 2\n");
+	do_pass2();
+	emitop("pushfp");
+	emitops("call", "main");
+	emitop("halt");
+	emitop("end");
+	StreamClose(infile);
+}
+
+end;
+
+
+function do_delete( \
+name, pcode, ptype, icode, type)
+{
+	ensuretoken(readtoken(), token_word);
+	name = tokens;
+	
+	t = inscope(name)
+	if (t != "var")
+		error("'"name"' is a "t", not a var")
+		
+	ptype = lookup(name, "type")
+	pcode = "m." var(name) lookup(ptype, "ntype")
+	itype = "void"
+	while (peek() == token_os)
+	{
+		readtoken()
+		queue()
+		itype = do_rvalue()
+		icode = dequeue()
+		ensuretoken(readtoken(), token_cs)
+		if (peek() == token_os)
+		{
+			queue()
+			ptype = do_lookupnode(ptype, pcode, itype, icode)
+			pcode = dequeue()
+		}
+	}
+
+	if ((ptype ~ /^dict/) || (ptype ~ /^array/))
+		emit("clear." db[ptype, "ntypelong"] "(" pcode ")\n")
+	else
+		error("Can't delete elements yet")
+	
+	ensureeos()
+}
