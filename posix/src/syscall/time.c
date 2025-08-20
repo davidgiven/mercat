@@ -9,6 +9,7 @@
 #include <dos.h>
 #else
 #include <unistd.h>
+#include <sys/time.h>
 #endif
 
 /* --- Returns the current time, in milliseconds --------------------------- */
