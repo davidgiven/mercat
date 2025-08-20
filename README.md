@@ -42,7 +42,7 @@ There may or may not be anything interesting there.
 Licence
 -------
 
-Everything here  © 21997 David Given, and is licenncd under the MIT open source
+Everything here  © 1997 David Given, and is licenncd under the MIT open source
 license. Please see [LICENSE](LICENSE) for the full text.  The tl;dr is: you
 can do what you like with it provided you don't claim you wrote it.
 
