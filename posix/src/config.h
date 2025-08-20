@@ -24,8 +24,8 @@
  * possible if you want to compile the compiler without running out of memory.
  * Blech. */
 
-// #define GC_THRESHOLD 50000	/* For dynamic allocator */
-#define GC_THRESHOLD 90		/* For static allocator */
+#define GC_THRESHOLD 50000	/* For dynamic allocator */
+// #define GC_THRESHOLD 90		/* For static allocator */
 
 /* If you're using the static allocator, this is the size of the table. As
  * mentioned above, garbage collections occur when this reaches 90% full.
