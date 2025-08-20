@@ -203,9 +203,9 @@ void ArrayResize(Object* o, int32 newsize)
 
 	switch(o->type)
 	{
-		case OBJ_BYTEARRAY:	factor = 1;	break;
-		case OBJ_INTARRAY:	factor = 4;	break;
-		case OBJ_OBJARRAY:	factor = 4;
+		case OBJ_BYTEARRAY:	factor = sizeof(char);	break;
+		case OBJ_INTARRAY:	factor = sizeof(int32);	break;
+		case OBJ_OBJARRAY:	factor = sizeof(void*);
 					if (newsize < o->size)
 					{
 						int32 i;
@@ -243,9 +243,9 @@ void ArrayInsert(Object* o, int32 index, int32 size)
 
 	switch(o->type)
 	{
-		case OBJ_BYTEARRAY:	factor = 1;	break;
-		case OBJ_INTARRAY:	factor = 4;	break;
-		case OBJ_OBJARRAY:	factor = 4;	break;
+		case OBJ_BYTEARRAY:	factor = sizeof(char);	break;
+		case OBJ_INTARRAY:	factor = sizeof(int32);	break;
+		case OBJ_OBJARRAY:	factor = sizeof(void*);	break;
 		default:
 			fatalError(FATAL_OBJTYPE, "Operation on object of invalid type");
 	}
@@ -269,9 +269,9 @@ void ArrayDelete(Object* o, int32 index, int32 size)
 
 	switch(o->type)
 	{
-		case OBJ_BYTEARRAY:	factor = 1;	break;
-		case OBJ_INTARRAY:	factor = 4;	break;
-		case OBJ_OBJARRAY:	factor = 4;	break;
+		case OBJ_BYTEARRAY:	factor = sizeof(char);	break;
+		case OBJ_INTARRAY:	factor = sizeof(int32);	break;
+		case OBJ_OBJARRAY:	factor = sizeof(void*);	break;
 		default:
 			fatalError(FATAL_OBJTYPE, "Operation on object of invalid type");
 	}
