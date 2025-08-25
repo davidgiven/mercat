@@ -15,6 +15,22 @@ There are backends for DOS and Posix. The standard library contains routines
 for file access, terminal-based screen access, some basic HTTP fetch features,
 etc.
 
+Why?
+----
+
+It's hilarious.
+
+It's also interesting to see how my coding style has changed in the 28 years
+since I wrote this, which is not at all. I could run this code through
+clang-format using my current settings and it would barely change. That says
+something about me, I guess?
+
+One other interesting thing is that as a fully-self-hosted compiler, Mercat
+needed a bootstrap compiler. For some reason I [wrote this in awk](core/com.awk).
+I don't know why; I was doing a lot of awk in those days. Being a recursive-
+descent compiler is not something which awk is good at, but it did a reasonably
+good job nevertheless.
+
 Where?
 ------
 
